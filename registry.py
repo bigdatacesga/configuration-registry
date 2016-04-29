@@ -2,7 +2,8 @@
 import re
 import kvstore
 
-PREFIX = 'frameworks'
+#PREFIX = 'frameworks'
+PREFIX = 'instances'
 # Create a global kvstore client
 #ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
 ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
@@ -18,12 +19,67 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
 
 def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
     """Get the properties of a given instance of service"""
-    if dn:
-        return Cluster('{}/{}'.format(PREFIX, dn))
+    if not dn:
+        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, id)
+    return Cluster(dn)
 
 
 def register(user=None, framework=None, flavour=None, nodes=None, services=None):
-    raise NotImplemented
+    prefix = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
+    try:
+        instanceid = _generate_id(prefix)
+    except kvstore.KeyDoesNotExist:
+        instanceid = 1
+    prefix = '{}/{}'.format(prefix, instanceid)
+    prefix_nodes = '{}/{}'.format(prefix, 'nodes')
+    prefix_nodes = '{}/{}'.format(prefix, 'nodes')
+    prefix_services = '{}/{}'.format(prefix, 'services')
+    for node in nodes:
+        _dump_node(nodes[node], '{}/{}'.format(prefix_nodes, node))
+    for service in services:
+        _dump_node(services[service], '{}/{}'.format(prefix_services, service))
+    return prefix
+
+
+def _generate_id(prefix):
+    """Generate a new unique ID for the new instance"""
+    subtree = _kv.recurse(prefix)
+    instances = subtree.keys()
+    used_ids = {_parse_id(e, prefix) for e in instances}
+    return max(used_ids) + 1
+
+
+def _parse_id(route, prefix):
+    pattern = prefix + r'/([^/]+)'
+    m = re.match(pattern, route)
+    if m:
+        return int(m.group(1))
+    else:
+        return 0
+
+
+def _dump_simple_dict(data, prefix):
+    """Dump a simple dictionary that contains only k:v pairs"""
+    for k in data:
+        _kv.set('{}/{}'.format(prefix, k), data[k])
+
+
+def _dump_simple_list(data, prefix):
+    """Dump a simple list that contains only k:v pairs"""
+    for e in data:
+        _kv.set('{}/{}'.format(prefix, e), '')
+
+
+def _dump_node(node, prefix):
+    """A node can contain k/v pairs, and also non-nested dictionaries and lists"""
+    for k in node:
+        v = node[k]
+        if isinstance(v, str):
+            _kv.set('{}/{}'.format(prefix, k), v)
+        elif isinstance(v, dict):
+            _dump_simple_dict(v, '{}/{}'.format(prefix, k))
+        elif isinstance(v, list) or isinstance(v, tuple):
+            _dump_simple_list(v, '{}/{}'.format(prefix, k))
 
 
 class Node(object):

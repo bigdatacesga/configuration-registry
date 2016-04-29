@@ -23,4 +23,65 @@ Basic usage examples::
     for node in nodes:
         print node.status
 
-    (user, framework, flavour, id) = registry.register(user='jlopez', framework='cdh', flavour='5.7.0', nodes=nodes, services=services)
+    (user, framework, flavour, instance_id) = registry.register(user='jlopez', framework='cdh', flavour='5.7.0', nodes=nodes, services=services)
+
+    nodes = {
+        'master0': {
+            'name': 'master0.local', # docker name
+            'id': '', # docker id
+            'status': 'pending',
+            'cpu': '1',
+            'mem': '2048',
+            'disks': {
+                'type': 'ssd',
+                'number': 1,
+                'disk1': '/data/1',
+            },
+            'networks': {
+                'eth0': '10.117.253.101',
+                'eth1': '10.112.253.101',
+            },
+            'host': '', # docker engine
+            'services': ['service0', 'service1'],
+        },
+        'slave0': {
+            'name': 'slave0.local', # docker name
+            'id': '', # docker id
+            'status': 'pending',
+            'cpu': '1',
+            'mem': '2048',
+            'disks': {
+                'type': 'sata',
+                'number': 2,
+                'disk1': '/data/1',
+                'disk2': '/data/2',
+            },
+            'networks': {
+                'eth0': '10.117.253.101',
+                'eth1': '10.112.253.101',
+            },
+            'host': '', # docker engine
+            'services': ['service2'],
+        },
+    }
+
+    services = {
+        'service0': {
+            'status': 'pending',
+            'nodes': ['master0'],
+            'property1': '2048',
+            'property2': '11',
+        },
+        'service1': {
+            'status': 'running',
+            'nodes': ['slave0'],
+            'property1': '2048',
+            'property2': '11',
+        },
+    }
+
+    framework = {
+        'executor': 'docker-executor',
+        'image': 'gluster:2.7.0',
+        'management_script': 'http://.../manage_gluster_cluster.py'
+    }
