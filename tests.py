@@ -1,6 +1,7 @@
 """Tests for the generic service discovery API"""
 import unittest
 import registry
+import kvstore
 
 MASTER0 = {
     'status': 'pending',
@@ -95,7 +96,10 @@ class KVMock(object):
         fields = key.split('/')
         subtree = self._data
         for f in fields:
-            subtree = subtree[f]
+            try:
+                subtree = subtree[f]
+            except KeyError:
+                raise kvstore.KeyDoesNotExist
         result = {}
         for e in subtree:
             result['{0}/{1}'.format(key, e)] = ''
@@ -226,10 +230,64 @@ class RegistryClusterTestCase(unittest.TestCase):
 
     def test_get_cluster_services(self):
         cluster = registry.Cluster('/clusters/cluster1')
-        nodes = REGISTRY['clusters']['cluster1']['services'].keys()
+        services = REGISTRY['clusters']['cluster1']['services'].keys()
         expected = [
-            registry.Node('clusters/cluster1/services/{0}'.format(e)) for e in nodes]
+            registry.Node('clusters/cluster1/services/{0}'.format(e)) for e in services]
         self.assertEqual(sorted(cluster.services), sorted(expected))
+
+
+class RegistryRegistrationTestCase(unittest.TestCase):
+
+    def setUp(self):
+        REGISTRY_COPY = REGISTRY.copy()
+        # Mock internal kvstore in the registry
+        registry._kv = KVMock(REGISTRY_COPY)
+
+    def tearDown(self):
+        pass
+
+    def test_register_new_cluster_instance_returns_dn(self):
+        nodes = REGISTRY['clusters']['cluster1']['nodes']
+        services = REGISTRY['clusters']['cluster1']['services']
+        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+                               services=services)
+        expected = registry.PREFIX + '/jlopez/a/1.0.0/1'
+        self.assertEqual(dn, expected)
+
+    def test_register_two_cluster_instances(self):
+        nodes = REGISTRY['clusters']['cluster1']['nodes']
+        services = REGISTRY['clusters']['cluster1']['services']
+        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+                               services=services)
+        expected = registry.PREFIX + '/jlopez/a/1.0.0/1'
+        self.assertEqual(dn, expected)
+        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+                               services=services)
+        expected = registry.PREFIX + '/jlopez/a/1.0.0/2'
+        self.assertEqual(dn, expected)
+
+    def test_get_cluster_instance(self):
+        nodes = REGISTRY['clusters']['cluster1']['nodes']
+        services = REGISTRY['clusters']['cluster1']['services']
+        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+                               services=services)
+        instance = registry.get_cluster_instance(dn=dn)
+        expected_dn = registry.PREFIX + '/jlopez/a/1.0.0/1'
+        expected_nodes = [
+            registry.Node('{}/nodes/{}'.format(expected_dn, e)) for e in nodes
+        ]
+        expected_services = [
+            registry.Service('{}/services/{}'.format(expected_dn, e)) for e in services
+        ]
+        self.assertEqual(sorted(instance.nodes), sorted(expected_nodes))
+        self.assertEqual(sorted(instance.services), sorted(expected_services))
+
+    def test_parse_id(self):
+        route = 'instances/jlopez/cdh/5.7.0/99/nodes/master0/status'
+        prefix = 'instances/jlopez/cdh/5.7.0'
+        iid = registry._parse_id(route, prefix)
+        self.assertEqual(iid, 99)
+
 
 if __name__ == '__main__':
     unittest.main()
