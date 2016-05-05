@@ -1,5 +1,6 @@
 """Configuration Registry API"""
 import re
+
 import kvstore
 
 #PREFIX = 'frameworks'
@@ -82,8 +83,50 @@ def _dump_node(node, prefix):
             _dump_simple_list(v, '{}/{}'.format(prefix, k))
 
 
+class Disk(object):
+    """Represents a disk"""
+    def __init__(self, endpoint):
+        # Avoid infinite recursion reading self._endpoint
+        super(Disk, self).__setattr__('_endpoint', endpoint.rstrip('/'))
+
+    def __getattr__(self, name):
+        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+
+    def __setattr__(self, name, value):
+        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    def __str__(self):
+        return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Node({})'.format(self._endpoint)
+
+    def __eq__(self, other):
+        return self._endpoint == other._endpoint
+
+    def __lt__(self, other):
+        return self._endpoint < other._endpoint
+
+
 class Node(object):
-    """Represents a node"""
+    """Represents a node
+    
+    To set the disks use:
+        node.disks = [
+            {
+                'name': 'disk1',
+                 'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
+                 'destination': '/data/1',
+                 'mode': 'rw'
+            },
+            {
+                'name': 'disk2',
+                 'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
+                 'destination': '/data/2',
+                 'mode': 'rw'
+            },
+        ]
+    """
     def __init__(self, endpoint):
         # Avoid infinite recursion reading self._endpoint
         super(Node, self).__setattr__('_endpoint', endpoint.rstrip('/'))
@@ -97,17 +140,38 @@ class Node(object):
     @property
     def services(self):
         subtree = _kv.recurse(self._endpoint + '/services')
-        services = subtree.keys()
-        return [get_endpoint_last_element(e) for e in services]
+        services = [_parse_endpoint_last_element(e) for e in subtree.keys()]
+        clusterdn = _parse_cluster_dn(self._endpoint)
+        return [Service('{}/services/{}'.format(clusterdn, s)) for s in services]
 
     @services.setter
     def services(self, services):
         _kv.delete('{0}/{1}'.format(self._endpoint, 'services'), recursive=True)
-        for s in services:
-            _kv.set('{0}/{1}/{2}'.format(self._endpoint, 'services', s), '')
+        for service in services:
+            _kv.set(_parse_endpoint_last_element(service._endpoint), '')
+
+    @property
+    def disks(self):
+        subtree = _kv.recurse(self._endpoint + '/disks')
+        disks = set([_parse_disk(e) for e in subtree.keys()])
+        return [Disk(d) for d in disks]
+
+    @disks.setter
+    def disks(self, disks):
+        basedn = '{0}/{1}'.format(self._endpoint, 'disks')
+        _kv.delete(basedn, recursive=True)
+        for disk in disks:
+            diskdn = '{}/{}'.format(basedn, disk['name'])
+            _kv.set('{}/origin'.format(diskdn), disk['origin'])
+            _kv.set('{}/destination'.format(diskdn), disk['destination'])
+            _kv.set('{}/mode'.format(diskdn), disk['mode'])
+            _kv.set('{}/name'.format(diskdn), disk['name'])
 
     def __str__(self):
         return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Node({})'.format(self._endpoint)
 
     def __eq__(self, other):
         return self._endpoint == other._endpoint
@@ -131,17 +195,21 @@ class Service(object):
     @property
     def nodes(self):
         subtree = _kv.recurse(self._endpoint + '/nodes')
-        nodes = subtree.keys()
-        return [get_endpoint_last_element(e) for e in nodes]
+        nodes = [_parse_endpoint_last_element(e) for e in subtree.keys()]
+        clusterdn = _parse_cluster_dn(self._endpoint)
+        return [Node('{}/nodes/{}'.format(clusterdn, n)) for n in nodes]
 
     @nodes.setter
     def nodes(self, nodes):
         _kv.delete('{0}/{1}'.format(self._endpoint, 'nodes'), recursive=True)
-        for s in nodes:
-            _kv.set('{0}/{1}/{2}'.format(self._endpoint, 'nodes', s), '')
+        for node in nodes:
+            _kv.set(_parse_endpoint_last_element(node._endpoint), '')
 
     def __str__(self):
         return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Service({})'.format(self._endpoint)
 
     def __eq__(self, other):
         return self._endpoint == other._endpoint
@@ -165,17 +233,21 @@ class Cluster(object):
     @property
     def nodes(self):
         subtree = _kv.recurse(self._endpoint + '/nodes')
-        nodes = {_parse_node(e) for e in subtree.keys()}
-        return [Node(e) for e in nodes]
+        nodes = {_parse_node(e) for e in subtree.keys() if not e.endswith("/nodes/")}
+        x = [Node(e) for e in nodes]
+        return x
 
     @property
     def services(self):
         subtree = _kv.recurse(self._endpoint + '/services')
-        services = {_parse_service(e) for e in subtree.keys()}
+        services = {_parse_service(e) for e in subtree.keys() if not e.endswith("/services/")}
         return [Service(e) for e in services]
 
     def __str__(self):
         return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Cluster({})'.format(self._endpoint)
 
     def __eq__(self, other):
         return self._endpoint == other._endpoint
@@ -184,18 +256,42 @@ class Cluster(object):
         return self._endpoint < other._endpoint
 
 
-def get_endpoint_last_element(endpoint):
-    """Get the last element of a given endpoint"""
+def _parse_endpoint_last_element(endpoint):
+    """Parse the last element of a given endpoint"""
     return endpoint.rstrip('/').split('/')[-1]
 
 
+def _parse_cluster_dn(endpoint):
+    """Parse the cluster base DN of a given endpoint"""
+    #fields = endpoint.split('/')
+    #return '/'.join(fields[0:4])
+    m = re.match(r'^(.+)/services/[^/]+/nodes', endpoint)
+    if m:
+        return m.group(1)
+    m = re.match(r'^(.+)/nodes/[^/]+/services', endpoint)
+    if m:
+        return m.group(1)
+    m = re.match(r'^(.+)/services', endpoint)
+    if m:
+        return m.group(1)
+    m = re.match(r'^(.+)/nodes', endpoint)
+    if m:
+        return m.group(1)
+
+
 def _parse_service(endpoint):
-    """Parse the service part of a given enpoint"""
+    """Parse the service part of a given endpoint"""
     m = re.match(r'^(.*/services/[^/]+)', endpoint)
     return m.group(1)
 
 
 def _parse_node(endpoint):
-    """Parse the node part of a given enpoint"""
+    """Parse the node part of a given endpoint"""
     m = re.match(r'^(.*/nodes/[^/]+)', endpoint)
+    return m.group(1)
+
+
+def _parse_disk(endpoint):
+    """Parse the disk part of a given endpoint"""
+    m = re.match(r'^(.*/disks/[^/]+)', endpoint)
     return m.group(1)
