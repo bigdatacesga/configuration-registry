@@ -238,6 +238,18 @@ class RegistryNodeTestCase(unittest.TestCase):
         node.disks = expected
         self.assertEqual(node.disks, sorted(expected))
 
+    def test_get_node_networks(self):
+        raise NotImplemented
+
+    def test_set_node_networks(self):
+        raise NotImplemented
+
+    def test_get_node_tags(self):
+        raise NotImplemented
+
+    def test_set_node_tags(self):
+        raise NotImplemented
+
 
 class RegistryServiceTestCase(unittest.TestCase):
 

@@ -84,7 +84,26 @@ def _dump_node(node, prefix):
 
 
 class Disk(object):
-    """Represents a disk"""
+    """Represents a disk
+    
+    To set the disks use:
+        node.disks = [
+            {
+                 'name': 'disk1',
+                 'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
+                 'destination': '/data/1',
+                 'mode': 'rw',
+                 'type': 'sata',
+            },
+            {
+                 'name': 'disk2',
+                 'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
+                 'destination': '/data/2',
+                 'mode': 'rw'
+                 'type': 'sata',
+            },
+        ]
+    """
     def __init__(self, endpoint):
         # Avoid infinite recursion reading self._endpoint
         super(Disk, self).__setattr__('_endpoint', endpoint.rstrip('/'))
@@ -99,7 +118,53 @@ class Disk(object):
         return str(self._endpoint)
 
     def __repr__(self):
-        return 'Node({})'.format(self._endpoint)
+        return 'Disk({})'.format(self._endpoint)
+
+    def __eq__(self, other):
+        return self._endpoint == other._endpoint
+
+    def __lt__(self, other):
+        return self._endpoint < other._endpoint
+
+
+class Network(object):
+    """Represents a network address
+    
+    To set the networks use:
+        node.networks = [
+            {
+                 'name': 'eth0',
+                 'device': 'eth0',
+                 'bridge': 'virbrPRIVATE',
+                 'address': '10.112.251.101',
+                 'netmask': '16',
+                 'gateway': '10.112.0.1',
+            },
+            {
+                 'name': 'eth1',
+                 'device': 'eth1',
+                 'bridge': 'virbrSTORAGE',
+                 'address': '10.117.251.101',
+                 'netmask': '16',
+                 'gateway': '',
+            },
+        ]
+    """
+    def __init__(self, endpoint):
+        # Avoid infinite recursion reading self._endpoint
+        super(Network, self).__setattr__('_endpoint', endpoint.rstrip('/'))
+
+    def __getattr__(self, name):
+        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+
+    def __setattr__(self, name, value):
+        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    def __str__(self):
+        return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Network({})'.format(self._endpoint)
 
     def __eq__(self, other):
         return self._endpoint == other._endpoint
@@ -111,21 +176,17 @@ class Disk(object):
 class Node(object):
     """Represents a node
     
-    To set the disks use:
-        node.disks = [
-            {
-                'name': 'disk1',
-                 'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
-                 'destination': '/data/1',
-                 'mode': 'rw'
-            },
-            {
-                'name': 'disk2',
-                 'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
-                 'destination': '/data/2',
-                 'mode': 'rw'
-            },
-        ]
+    It must include:
+      * type: eg. docker
+      * name: eg. slave5
+      * clustername: eg. jlopez-cdh-5.7.0-1
+      * tags: eg. ('slave', 'datanode')
+      * docker_image: eg. cdh:5.7.0
+      * docker_opts: specific opts 
+          eg. --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:ro
+      * disks
+      * networks
+      * services
     """
     def __init__(self, endpoint):
         # Avoid infinite recursion reading self._endpoint
@@ -161,11 +222,42 @@ class Node(object):
         basedn = '{0}/{1}'.format(self._endpoint, 'disks')
         _kv.delete(basedn, recursive=True)
         for disk in disks:
-            diskdn = '{}/{}'.format(basedn, disk['name'])
-            _kv.set('{}/origin'.format(diskdn), disk['origin'])
-            _kv.set('{}/destination'.format(diskdn), disk['destination'])
-            _kv.set('{}/mode'.format(diskdn), disk['mode'])
-            _kv.set('{}/name'.format(diskdn), disk['name'])
+            diskdn = '{0}/{1}'.format(basedn, disk['name'])
+            _kv.set('{0}/origin'.format(diskdn), disk['origin'])
+            _kv.set('{0}/destination'.format(diskdn), disk['destination'])
+            _kv.set('{0}/mode'.format(diskdn), disk['mode'])
+            _kv.set('{0}/type'.format(diskdn), disk['name'])
+            _kv.set('{0}/name'.format(diskdn), disk['name'])
+
+    @property
+    def networks(self):
+        subtree = _kv.recurse(self._endpoint + '/networks')
+        networks = set([_parse_network(e) for e in subtree.keys()])
+        return [Network(n) for n in networks]
+
+    @networks.setter
+    def networks(self, networks):
+        basedn = '{0}/{1}'.format(self._endpoint, 'networks')
+        _kv.delete(basedn, recursive=True)
+        for network in networks:
+            networkdn = '{0}/{1}'.format(basedn, network['name'])
+            _kv.set('{0}/address'.format(networkdn), network['address'])
+            _kv.set('{0}/bridge'.format(networkdn), network['bridge'])
+            _kv.set('{0}/device'.format(networkdn), network['device'])
+            _kv.set('{0}/gateway'.format(networkdn), network['gateway'])
+            _kv.set('{0}/netmask'.format(networkdn), network['netmask'])
+            _kv.set('{0}/name'.format(networkdn), network['name'])
+
+    @property
+    def tags(self):
+        dn = '{0}/tags'.format(self._endpoint)
+        return [x.strip() for x in _kv.get(dn).split(',')]
+
+    @tags.setter
+    def tags(self, tags):
+        dn = '{0}/tags'.format(self._endpoint)
+        value = ','.join(tags)
+        _kv.set(dn, value)
 
     def __str__(self):
         return str(self._endpoint)
@@ -294,4 +386,10 @@ def _parse_node(endpoint):
 def _parse_disk(endpoint):
     """Parse the disk part of a given endpoint"""
     m = re.match(r'^(.*/disks/[^/]+)', endpoint)
+    return m.group(1)
+
+
+def _parse_network(endpoint):
+    """Parse the network part of a given endpoint"""
+    m = re.match(r'^(.*/networks/[^/]+)', endpoint)
     return m.group(1)
