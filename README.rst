@@ -85,3 +85,30 @@ Basic usage examples::
         'image': 'gluster:2.7.0',
         'management_script': 'http://.../manage_gluster_cluster.py'
     }
+
+{'master0': {'cpu': '1',
+  'disks': {'disk1': '/data/1', 'number': 1, 'type': 'ssd'},
+  'host': '',
+  'id': '',
+  'mem': '2048',
+  'name': 'master0.local',
+  'networks': {'eth0': '10.117.253.101', 'eth1': '10.112.253.101'},
+  'services': ['service0', 'service1'],
+  'status': 'pending'},
+ 'slave0': {'cpu': '1',
+  'disks': {'disk1': '/data/1',
+   'disk2': '/data/2',
+   'number': 2,
+   'type': 'sata',
+   'volumes': {'disk1': {'destination': '/data/1',
+     'mode': 'rw',
+     'origin': '/data/1/instances-jlopez-template-0.1.0-2'},
+    'disk2': {'destination': '/data/2', 'mode': 'rw', 'origin': '/data/2'}}},
+  'host': '',
+  'id': '',
+  'mem': '2048',
+  'name': 'slave0.local',
+  'networks': {'eth0': '10.117.253.101', 'eth1': '10.112.253.101'},
+  'services': ['service2'],
+  'status': 'pending'}}
+
