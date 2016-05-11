@@ -85,7 +85,7 @@ def _dump_node(node, prefix):
 
 class Disk(object):
     """Represents a disk
-    
+
     To set the disks use:
         node.disks = [
             {
@@ -129,7 +129,7 @@ class Disk(object):
 
 class Network(object):
     """Represents a network address
-    
+
     To set the networks use:
         node.networks = [
             {
@@ -175,14 +175,14 @@ class Network(object):
 
 class Node(object):
     """Represents a node
-    
+
     It must include:
       * type: eg. docker
       * name: eg. slave5
       * clustername: eg. jlopez-cdh-5.7.0-1
       * tags: eg. ('slave', 'datanode')
       * docker_image: eg. cdh:5.7.0
-      * docker_opts: specific opts 
+      * docker_opts: specific opts
           eg. --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:ro
       * disks
       * networks
@@ -214,8 +214,18 @@ class Node(object):
     @property
     def disks(self):
         subtree = _kv.recurse(self._endpoint + '/disks')
-        disks = set([_parse_disk(e) for e in subtree.keys()])
+        disks = set([_parse_disk(e) for e in subtree.keys() if not e.endswith("/disks/")])
         return [Disk(d) for d in disks]
+
+
+    #Temporary FIX
+    def set_disks(self, disks):
+        basedn = '{0}/{1}'.format(self._endpoint, 'disks')
+        #_kv.delete(basedn, recursive=True)
+        for disk in disks:
+            diskdn = '{0}/{1}'.format(basedn, disk['name'])
+            for k in disk:
+                _kv.set('{0}/{1}'.format(diskdn,k), disk[k])
 
     @disks.setter
     def disks(self, disks):
@@ -226,7 +236,7 @@ class Node(object):
             _kv.set('{0}/origin'.format(diskdn), disk['origin'])
             _kv.set('{0}/destination'.format(diskdn), disk['destination'])
             _kv.set('{0}/mode'.format(diskdn), disk['mode'])
-            _kv.set('{0}/type'.format(diskdn), disk['name'])
+            _kv.set('{0}/type'.format(diskdn), disk['type'])
             _kv.set('{0}/name'.format(diskdn), disk['name'])
 
     @property
@@ -322,12 +332,15 @@ class Cluster(object):
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
+    def set_attributes(self, data):
+        for k in data:
+            _kv.set('{0}/{1}'.format(self._endpoint, k), data[k])
+
     @property
     def nodes(self):
         subtree = _kv.recurse(self._endpoint + '/nodes')
         nodes = {_parse_node(e) for e in subtree.keys() if not e.endswith("/nodes/")}
-        x = [Node(e) for e in nodes]
-        return x
+        return [Node(e) for e in nodes]
 
     @property
     def services(self):
