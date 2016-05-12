@@ -33,7 +33,6 @@ def register(user=None, framework=None, flavour=None, nodes=None, services=None)
         instanceid = 1
     prefix = '{}/{}'.format(prefix, instanceid)
     prefix_nodes = '{}/{}'.format(prefix, 'nodes')
-    prefix_nodes = '{}/{}'.format(prefix, 'nodes')
     prefix_services = '{}/{}'.format(prefix, 'services')
     for node in nodes:
         _dump_node(nodes[node], '{}/{}'.format(prefix_nodes, node))
@@ -245,6 +244,15 @@ class Node(object):
         networks = set([_parse_network(e) for e in subtree.keys()])
         return [Network(n) for n in networks]
 
+    #Temporary FIX
+    def set_networks(self, networks):
+        basedn = '{0}/{1}'.format(self._endpoint, 'networks')
+        #_kv.delete(basedn, recursive=True)
+        for network in networks:
+            networkdn = '{0}/{1}'.format(basedn, network['name'])
+            for k in network:
+                _kv.set('{0}/{1}'.format(networkdn, k), network[k])
+
     @networks.setter
     def networks(self, networks):
         basedn = '{0}/{1}'.format(self._endpoint, 'networks')
@@ -332,6 +340,7 @@ class Cluster(object):
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
+    # Temporary FIX ¿?
     def set_attributes(self, data):
         for k in data:
             _kv.set('{0}/{1}'.format(self._endpoint, k), data[k])
