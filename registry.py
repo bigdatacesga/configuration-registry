@@ -69,6 +69,25 @@ def _dump_simple_list(data, prefix):
     for e in data:
         _kv.set('{}/{}'.format(prefix, e), '')
 
+def _dump_list(data, prefix):
+    for e in data:
+        if isinstance(e, list):
+            _dump_list(e, '{}/{}'.format(prefix, '_')) # list of lists?
+        elif isinstance(e, dict):
+            _dump_dict(e, '{}/{}'.format(prefix, e["name"]))
+        elif isinstance(e, str):
+            _kv.set('{}/{}'.format(prefix, e), '')
+
+def _dump_dict(data, prefix):
+    for k in data:
+        v = data[k]
+        if isinstance(v, list):
+            _dump_list(v, '{}/{}'.format(prefix, k))
+        elif isinstance(v, dict):
+            _dump_dict(v, '{}/{}'.format(prefix, v["name"]))
+        elif isinstance(v, basestring):
+            # basestring is True for all strings, unicode, ascii...
+            _kv.set('{}/{}'.format(prefix, k), v)
 
 def _dump_node(node, prefix):
     """A node can contain k/v pairs, and also non-nested dictionaries and lists"""
@@ -77,9 +96,12 @@ def _dump_node(node, prefix):
         if isinstance(v, str):
             _kv.set('{}/{}'.format(prefix, k), v)
         elif isinstance(v, dict):
-            _dump_simple_dict(v, '{}/{}'.format(prefix, k))
+            #_dump_simple_dict(v, '{}/{}'.format(prefix, k))
+            _dump_dict(v, '{}/{}'.format(prefix, k))
         elif isinstance(v, list) or isinstance(v, tuple):
-            _dump_simple_list(v, '{}/{}'.format(prefix, k))
+            #_dump_simple_list(v, '{}/{'.format(prefix, k))
+            _dump_list(v, '{}/{}'.format(prefix, k))
+
 
 
 class Disk(object):
@@ -340,7 +362,7 @@ class Cluster(object):
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
-    # Temporary FIX ¿?
+    # Temporary FIX ?
     def set_attributes(self, data):
         for k in data:
             _kv.set('{0}/{1}'.format(self._endpoint, k), data[k])
