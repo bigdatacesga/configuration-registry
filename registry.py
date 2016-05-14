@@ -263,7 +263,7 @@ class Node(object):
     @property
     def networks(self):
         subtree = _kv.recurse(self._endpoint + '/networks')
-        networks = set([_parse_network(e) for e in subtree.keys()])
+        networks = set([_parse_network(e) for e in sorted(subtree.keys())])
         return [Network(n) for n in networks]
 
     #Temporary FIX

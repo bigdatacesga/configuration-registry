@@ -45,6 +45,97 @@ Design v3
   services/slurmctld/nodes
     -> nodes that provide the slurmctld service in the framework
 
+Design v4
+---------
+```
+instances/
+└── brunneis
+    └── cdh
+        └── 5.7.X
+            └── 1
+                ├── nodes
+                │   └── node1
+                │       ├── cpu
+                │       ├── disks
+                │       │   └── disk1
+                │       │       ├── destination
+                │       │       ├── mode
+                │       │       ├── name
+                │       │       ├── origin
+                │       │       └── type
+                │       ├── docker_image
+                │       ├── docker_opts
+                │       ├── host
+                │       ├── id
+                │       ├── mem
+                │       ├── name
+                │       ├── clustername
+                │       ├── networks
+                │       │   └── eth0
+                │       │       ├── address
+                │       │       ├── bridge
+                │       │       ├── device
+                │       │       ├── gateway
+                │       │       ├── netmask
+                │       │       └── network
+                │       ├── services
+                │       │   └── service1 : spark-master
+                │       │   └── service2 : spark-history-server
+                │       │   └── service3 : hbase-master
+                │       │   └── service4 : hbase-thrift
+                │       │   └── service5 : hbase-rest
+                │       │   └── service6 : hbase-regionserver
+                │       ├── status
+                │       ├── port
+                │       ├── check_ports
+                │       └── tags
+                └── services
+                    └── service1
+                        ├── name: name that will be given to this roledef in fabric orquestrator
+                        ├── nodes
+                        │   ├── node1
+                        │   └── node2
+                        ├── property1
+                        ├── property2
+                        └── status
+                    └── service2
+                        ├── name
+                        ├── nodes
+                        │   └── node1
+                        ├── property1
+                        ├── property2
+                        └── status
 
+```
+
+## Docker-executor
+   Node object:
+
+    - name: name to give to the docker container
+    - clustername: name of the cluster/service to which this docker belongs
+    - docker_image
+    - docker_opts
+    - disks: Disk object list (see below)
+    - networks: Network object list (see below)
+    - tags: ('master', 'yarn')
+    - status: pending, running, failed, stopped
+    - host: docker engine where the container is running
+    - id: docker id
+    - port: main service port, e.g. 22
+    - check_ports: list of ports to check that the container is alive
+
+    Network object (registry.Network object):
+
+    - device
+    - address
+    - bridge
+    - netmask
+    - gateway
+
+    Volume object (registry.Disk object):
+
+    - origin
+    - destination
+    - mode
 
 
