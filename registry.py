@@ -246,7 +246,7 @@ class Node(object):
         for disk in disks:
             diskdn = '{0}/{1}'.format(basedn, disk['name'])
             for k in disk:
-                _kv.set('{0}/{1}'.format(diskdn,k), disk[k])
+                _kv.set('{0}/{1}'.format(diskdn, k), disk[k])
 
     @disks.setter
     def disks(self, disks):
@@ -263,8 +263,8 @@ class Node(object):
     @property
     def networks(self):
         subtree = _kv.recurse(self._endpoint + '/networks')
-        networks = set([_parse_network(e) for e in sorted(subtree.keys())])
-        return [Network(n) for n in networks]
+        networks = set([_parse_network(e) for e in subtree.keys()])
+        return [Network(n) for n in sorted(networks)]
 
     #Temporary FIX
     def set_networks(self, networks):
