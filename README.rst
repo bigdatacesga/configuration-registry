@@ -86,6 +86,11 @@ Basic usage examples::
         'management_script': 'http://.../manage_gluster_cluster.py'
     }
 
+
+Notes
+-----
+
+```
 {'master0': {'cpu': '1',
   'disks': {'disk1': '/data/1', 'number': 1, 'type': 'ssd'},
   'host': '',
@@ -111,4 +116,17 @@ Basic usage examples::
   'networks': {'eth0': '10.117.253.101', 'eth1': '10.112.253.101'},
   'services': ['service2'],
   'status': 'pending'}}
+
+```
+
+
+Copy recursively an instance into a new one:
+
+```
+slave0 = kv.recurse('instances/jlopez/cdh/5.7.0/1/nodes/slave0')
+slave1 = {k.replace('slave0', 'slave1'): slave0[k] for k in slave0.keys()}
+for k in slave1.keys():
+    kv.set(k, slave1[k])
+
+```
 

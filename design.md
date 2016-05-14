@@ -97,7 +97,7 @@ instances/
                         │   └── node2
                         ├── property1
                         ├── property2
-                        └── status
+                        └── status: can be '_', 'configured', 'stopped' or 'running'
                     └── service2
                         ├── name
                         ├── nodes
