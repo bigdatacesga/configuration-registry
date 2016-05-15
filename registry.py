@@ -26,6 +26,7 @@ def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=No
 
 
 def register(user=None, framework=None, flavour=None, nodes=None, services=None):
+    """Register a new instance"""
     prefix = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
     try:
         instanceid = _generate_id(prefix)
@@ -69,6 +70,7 @@ def _dump_simple_list(data, prefix):
     for e in data:
         _kv.set('{}/{}'.format(prefix, e), '')
 
+
 def _dump_list(data, prefix):
     for e in data:
         if isinstance(e, list):
@@ -77,6 +79,7 @@ def _dump_list(data, prefix):
             _dump_dict(e, '{}/{}'.format(prefix, e["name"]))
         elif isinstance(e, str):
             _kv.set('{}/{}'.format(prefix, e), '')
+
 
 def _dump_dict(data, prefix):
     for k in data:
@@ -88,6 +91,7 @@ def _dump_dict(data, prefix):
         elif isinstance(v, basestring):
             # basestring is True for all strings, unicode, ascii...
             _kv.set('{}/{}'.format(prefix, k), v)
+
 
 def _dump_node(node, prefix):
     """A node can contain k/v pairs, and also non-nested dictionaries and lists"""
@@ -101,7 +105,6 @@ def _dump_node(node, prefix):
         elif isinstance(v, list) or isinstance(v, tuple):
             #_dump_simple_list(v, '{}/{'.format(prefix, k))
             _dump_list(v, '{}/{}'.format(prefix, k))
-
 
 
 class Disk(object):
@@ -238,8 +241,7 @@ class Node(object):
         disks = set([_parse_disk(e) for e in subtree.keys() if not e.endswith("/disks/")])
         return [Disk(d) for d in disks]
 
-
-    #Temporary FIX
+    #FIXME: Temporary FIX
     def set_disks(self, disks):
         basedn = '{0}/{1}'.format(self._endpoint, 'disks')
         #_kv.delete(basedn, recursive=True)
@@ -266,7 +268,7 @@ class Node(object):
         networks = set([_parse_network(e) for e in subtree.keys()])
         return [Network(n) for n in sorted(networks)]
 
-    #Temporary FIX
+    #FIXME: Temporary FIX
     def set_networks(self, networks):
         basedn = '{0}/{1}'.format(self._endpoint, 'networks')
         #_kv.delete(basedn, recursive=True)
@@ -297,6 +299,17 @@ class Node(object):
     def tags(self, tags):
         dn = '{0}/tags'.format(self._endpoint)
         value = ','.join(tags)
+        _kv.set(dn, value)
+
+    @property
+    def check_ports(self):
+        dn = '{0}/check_ports'.format(self._endpoint)
+        return [int(x.strip()) for x in _kv.get(dn).split(',')]
+
+    @check_ports.setter
+    def check_ports(self, check_ports):
+        dn = '{0}/check_ports'.format(self._endpoint)
+        value = ','.join(check_ports)
         _kv.set(dn, value)
 
     def __str__(self):

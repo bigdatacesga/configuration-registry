@@ -72,19 +72,19 @@ instances/
                 │       ├── clustername
                 │       ├── networks
                 │       │   └── eth0
-                │       │       ├── address
+                │       │       ├── address: can be an static address value or 'dynamic', '_' for dynamic allocation
                 │       │       ├── bridge
                 │       │       ├── device
                 │       │       ├── gateway
                 │       │       ├── netmask
-                │       │       └── network
+                │       │       └── networkname
                 │       ├── services
-                │       │   └── service1 : spark-master
-                │       │   └── service2 : spark-history-server
-                │       │   └── service3 : hbase-master
-                │       │   └── service4 : hbase-thrift
-                │       │   └── service5 : hbase-rest
-                │       │   └── service6 : hbase-regionserver
+                │       │   └── spark-master
+                │       │   └── spark-history-server
+                │       │   └── hbase-master
+                │       │   └── hbase-thrift
+                │       │   └── hbase-rest
+                │       │   └── hbase-regionserver
                 │       ├── status
                 │       ├── port
                 │       ├── check_ports
