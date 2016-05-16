@@ -1,10 +1,13 @@
 """Configuration Registry API"""
 import re
+import jinja2
+import json
 
 import kvstore
 
 #PREFIX = 'frameworks'
 PREFIX = 'instances'
+TMPLPREFIX = 'templates'
 # Create a global kvstore client
 #ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
 ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
@@ -16,6 +19,35 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     ENDPOINT = endpoint
     global _kv
     _kv = kvstore.Client(ENDPOINT)
+
+
+def add_service_template(name, version, description, template, options):
+    """Register a new service template"""
+    dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
+    _kv.set('{}/name'.format(dn), name)
+    _kv.set('{}/version'.format(dn), version)
+    _kv.set('{}/description'.format(dn), description)
+    _kv.set('{}/template'.format(dn), template)
+    _kv.set('{}/options'.format(dn), options)
+    return Template(dn)
+
+
+def get_service_template(name, version):
+    """Get the template of a given service"""
+    dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
+    return Template(dn)
+
+
+def add_cluster_instance(user=None, framework=None, flavour=None, options=None):
+    """Register a new instance using information from the service template"""
+    service = get_service_template(framework, flavour)
+    options = json.loads(service.options)
+    print options
+    t = jinja2.Template(service.template)
+    rendered = t.render(slaves=dict(number=2, disks=4), instancename='myinstanceID')
+    #print rendered
+    data = json.loads(rendered)
+    print data
 
 
 def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
@@ -397,6 +429,31 @@ class Cluster(object):
 
     def __repr__(self):
         return 'Cluster({})'.format(self._endpoint)
+
+    def __eq__(self, other):
+        return self._endpoint == other._endpoint
+
+    def __lt__(self, other):
+        return self._endpoint < other._endpoint
+
+
+class Template(object):
+    """Represents a service template"""
+    def __init__(self, endpoint):
+        # Avoid infinite recursion reading self._endpoint
+        super(Template, self).__setattr__('_endpoint', endpoint.rstrip('/'))
+
+    def __getattr__(self, name):
+        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+
+    def __setattr__(self, name, value):
+        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    def __str__(self):
+        return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Template({})'.format(self._endpoint)
 
     def __eq__(self, other):
         return self._endpoint == other._endpoint
