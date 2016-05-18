@@ -130,3 +130,57 @@ for k in slave1.keys():
 
 ```
 
+Sample service Template:
+```
+{% set comma = joiner(",") %}
+{
+"nodes": {
+    "master0": {
+        "name": "master0", "clustername": "X", "status": "X",
+        "docker_image": "X", "docker_opts": "X",
+        "port": "X", "check_ports": [22, 80, 443], "tags": ["yarn", "master"],
+        "cpu": 1, "mem": 1024,
+        "host": "X", "id": "X", "status": "X",
+        "disks": {
+            "disk1": {
+                "name": "disk1", "type": "ssd",
+                "origin": "/data/1/{{ instancename }}",
+                "destination": "/data/1", "mode": "rw"
+            }
+        },
+        "networks": {
+            "eth0": {
+                "networkname": "admin", "device": "X", "bridge": "X",
+                "address": "X", "gateway": "X", "netmask": "X"
+            },
+            "eth1": {
+                "networkname": "storage", "device": "X", "bridge": "X",
+                "address": "X", "gateway": "X", "netmask": "X"
+            }
+        },
+        "services": ["yarn", "snamenode"]
+    },
+    "master1": {
+        "name": "master1", "clustername": "X", "status": "X",
+        "docker_image": "X", "docker_opts": "X",
+        "port": "X", "check_ports": [22, 80, 443], "tags": ["namenode", "master"],
+        "cpu": 1, "mem": 1024,
+        "host": "X", "id": "X", "status": "X",
+        "disks": {
+            "disk1": {
+                "name": "disk1", "type": "ssd",
+                "origin": "/data/1/{{ instancename }}",
+                "destination": "/data/1", "mode": "rw"
+            }
+        },
+        "networks": {
+            "eth0": {
+                "networkname": "admin", "device": "X", "bridge": "X",
+                "address": "X", "gateway": "X", "netmask": "X"
+            },
+            "eth1": {
+                "networkname": "storage", "device": "X", "bridge": "X",
+                "address": "X", "gateway": "X", "netmask": "X"
+            }
+```
+
