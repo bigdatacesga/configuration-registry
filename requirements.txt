@@ -1,2 +1,3 @@
 kvstore
 jinja2
+PyYAML

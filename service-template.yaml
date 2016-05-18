@@ -1,107 +1,141 @@
-{% set comma = joiner(",") %}
 nodes:
-    master0
-        name: master0
-        clustername: X
-        status: X
-        docker_image: X
-        docker_opts: X
-        port: X
-        check_ports: [22, 80, 443]
-        tags:
+  master0:
+    name: master0
+    clustername: _
+    status: _
+    docker_image: registry.domain.es:5000/masterimage:0.1.0
+    docker_opts: _
+    port: 22
+    check_ports: [22, 80, 443]
+    tags:
+      - yarn
+      - master
+    cpu: 1
+    mem: 1024
+    host: _
+    id: _
+    status: _
+    disks:
+      disk1:
+        name: disk1
+        type: ssd
+        origin: /data/1/{{ instancename }}
+        destination: /data/1
+        mode: rw
+        networks:
+          eth0:
+            networkname: admin
+            device: eth0
+            bridge: _
+            address: _
+            gateway: _
+            netmask: _
+          eth1:
+            networkname: storage
+            device: eth1
+            bridge: _
+            address: _
+            gateway: _
+            netmask: _
+        services: 
           - yarn
-          - master
-        cpu: 1
-        mem: 1024
-        host: X
-        id: X
-        status: X
-        disks:
-            disk1:
-                name: disk1
-                type: ssd
-                origin: /data/1/{{ instancename }}
-                destination: /data/1
-                mode: rw
-        "networks": {
-            "eth0": {
-                "networkname": "admin", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            },
-            "eth1": {
-                "networkname": "storage", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            }
-        },
-        "services": ["yarn", "snamenode"]
-    },
-    "master1": {
-        "name": "master1", "clustername": "X", "status": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 80, 443], "tags": ["namenode", "master"],
-        "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
-        "disks": {
-            "disk1": {
-                "name": "disk1", "type": "ssd",
-                "origin": "/data/1/{{ instancename }}",
-                "destination": "/data/1", "mode": "rw"
-            }
-        },
-        "networks": {
-            "eth0": {
-                "networkname": "admin", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            },
-            "eth1": {
-                "networkname": "storage", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            }
-        },
-        "services": ["namenode"]
-    },
-{% for n in range(0, slaves.number) %}
-    slave{{ n }}:
-        name: slave{{ n }}
-        clustername: X
-        "status": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 4444], "tags": ["datanode", "slave"],
-        "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
-        "disks": { {% set comma = joiner(",") %}{% for k in range(0, slaves.disks) %}
-            {{ comma() }} "disk{{ k }}": {
-                "name": "disk{{ k }}", "type": "sata",
-                "origin": "/data/{{ k }}/{{ instancename }}",
-                "destination": "/data/{{ k }}", "mode": "rw"
-            } {% endfor %}
-        },
-        "networks": {
-            "eth0": {
-                "networkname": "admin", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            },
-            "eth1": {
-                "networkname": "storage", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            }
-        },
-        "services": ["datanode"]
-    }
+          - snamenode
+  master1:
+    name: master1
+    clustername: _
+    status: _
+    docker_image: registry.domain.es:5000/masterimage:0.1.0
+    docker_opts: ""
+    port: 22
+    check_ports: [22, 1080]
+    tags:
+      - yarn
+      - master
+    cpu: 1
+    mem: 1024
+    host: _
+    id: _
+    status: _
+    disks:
+      disk1:
+        name: disk1
+        type: ssd
+        origin: /data/1/{{ instancename }}
+        destination: /data/1
+        mode: rw
+    networks:
+      eth0:
+        networkname: admin
+        device: eth0
+        bridge: _
+        address: _
+        gateway: _
+        netmask: _
+      eth1:
+        networkname: storage
+        device: eth1
+        bridge: _
+        address: _
+        gateway: _
+        netmask: _
+    services: 
+      - namenode
+{% for n in range(0, opts['slaves.number']) %}
+  slave{{ n }}:
+    name: slave{{ n }}
+    clustername: _
+    status: _
+    docker_image: registry.domain.es:5000/slaveimage:0.1.0
+    docker_opts: ""
+    port: 22
+    check_ports: [22, 4444]
+    tags:
+      - datanode
+      - slave
+    cpu: 2
+    mem: 4096
+    host: _
+    id: _
+    status: _
+    disks:
+{% for k in range(0, opts['slaves.disks']) %}
+      disk{{ k }}:
+        name: disk{{ k }}
+        type: sata
+        origin: /data/{{ k }}/{{ instancename }}
+        destination: /data/{{ k }}
+        mode: rw
 {% endfor %}
-},
-"services": {
-    "yarn": {
-        "name": "yarn", "status": "X",
-        "yarn.scheduler.minimum-allocation-vcores": 1,
-        "nodes": ["master0"]
-    },
-    "datanode": {
-        "name": "datanode", "status": "X",
-        "dfs.blocksize": 134217728,
-        "nodes": [{% set comma = joiner(",") %}{% for n in range(0, slaves.number) %}{{ comma() }}"slave{{ n }}"{% endfor %}]
-    }
-}
-
-}
-
+    networks:
+      eth0:
+        networkname: admin
+        device: eth0
+        bridge: _
+        address: _
+        gateway: _
+        netmask: _
+      eth1:
+        networkname: storage
+        device: eth1
+        bridge: _
+        address: _
+        gateway: _
+        netmask: _
+    services: 
+      - datanode
+{% endfor %}
+services:
+  yarn:
+    name: yarn
+    status: _
+    yarn.scheduler.minimum-allocation-vcores: 1
+    nodes:
+      - master0
+  datanode:
+    name: datanode
+    status: _
+    dfs.blocksize: {{ opts['dfs.blocksize'] }}
+    nodes:
+{% for n in range(0, opts['slaves.number']) %}
+      - slave{{ n }}
+{% endfor %}
