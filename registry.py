@@ -14,6 +14,18 @@ ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
 _kv = kvstore.Client(ENDPOINT)
 
 
+class InvalidOptionsError(Exception):
+    pass
+
+
+class NestedListsNotSupportedError(Exception):
+    pass
+
+
+class UnsupportedTypeError(Exception):
+    pass
+
+
 def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     """Configure a new connection to the registry"""
     ENDPOINT = endpoint
@@ -21,13 +33,14 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     _kv = kvstore.Client(ENDPOINT)
 
 
-def add_service_template(name, version, description, template, options):
+def add_service_template(name, version, description, template, options, templatetype='json+jinja2'):
     """Register a new service template"""
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.set('{}/name'.format(dn), name)
     _kv.set('{}/version'.format(dn), version)
     _kv.set('{}/description'.format(dn), description)
     _kv.set('{}/template'.format(dn), template)
+    _kv.set('{}/templatetype'.format(dn), templatetype)
     _kv.set('{}/options'.format(dn), options)
     return Template(dn)
 
@@ -38,57 +51,56 @@ def get_service_template(name, version):
     return Template(dn)
 
 
-def add_cluster_instance(user=None, framework=None, flavour=None, options=None):
+def add_service_instance(user=None, framework=None, flavour=None, options=None):
     """Register a new instance using information from the service template"""
     service = get_service_template(framework, flavour)
-    options = json.loads(service.options)
-    print options
-    t = jinja2.Template(service.template)
-    rendered = t.render(slaves=dict(number=2, disks=4), instancename='myinstanceID')
-    #print rendered
-    data = json.loads(rendered)
-    print data
+    templateopts = json.loads(service.options)
+    if not valid(options, templateopts):
+        raise InvalidOptionsError()
 
+    mergedopts = _merge(templateopts)
+    mergedopts.update(options)
 
-def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
-    """Get the properties of a given instance of service"""
-    if not dn:
-        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, id)
-    return Cluster(dn)
-
-
-def register(user=None, framework=None, flavour=None, nodes=None, services=None):
-    """Register a new instance"""
+    # Generate instanceid DN
     prefix = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
     try:
         instanceid = _generate_id(prefix)
     except kvstore.KeyDoesNotExist:
         instanceid = 1
-    prefix = '{}/{}'.format(prefix, instanceid)
+    dn = '{}/{}'.format(prefix, instanceid)
+
+    t = jinja2.Template(service.template)
+    # TODO: Decide the global variables to pass to the template
+    #       eg. instancedn, instancename, user, servicename, version
+    rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
+                        instancedn=dn, instancename=dn.replace('/', '-'))
+    data = json.loads(rendered)
+    #import pprint
+    #pprint.pprint(data)
+    kvinfo = {}
+    _populate(kvinfo, using=data, prefix=dn)
+    save(kvinfo)
+    return Cluster(dn)
+
+
+def save(kvinfo):
+    """Save kvinfo in the k/v store"""
+    for k in kvinfo:
+        _kv.set(k, kvinfo[k])
+
+
+def dump(dn, data):
+    """Dump data contents in the given dn"""
+    prefix = dn
     prefix_nodes = '{}/{}'.format(prefix, 'nodes')
     prefix_services = '{}/{}'.format(prefix, 'services')
+    nodes = data['nodes']
+    services = data['services']
     for node in nodes:
         _dump_node(nodes[node], '{}/{}'.format(prefix_nodes, node))
     for service in services:
         _dump_node(services[service], '{}/{}'.format(prefix_services, service))
     return prefix
-
-
-def _generate_id(prefix):
-    """Generate a new unique ID for the new instance"""
-    subtree = _kv.recurse(prefix)
-    instances = subtree.keys()
-    used_ids = {_parse_id(e, prefix) for e in instances}
-    return max(used_ids) + 1
-
-
-def _parse_id(route, prefix):
-    pattern = prefix + r'/([^/]+)'
-    m = re.match(pattern, route)
-    if m:
-        return int(m.group(1))
-    else:
-        return 0
 
 
 def _dump_simple_dict(data, prefix):
@@ -137,6 +149,121 @@ def _dump_node(node, prefix):
         elif isinstance(v, list) or isinstance(v, tuple):
             #_dump_simple_list(v, '{}/{'.format(prefix, k))
             _dump_list(v, '{}/{}'.format(prefix, k))
+
+
+def _populate(result, using, prefix=''):
+    """Converts a data dict in a flat key:value data structure"""
+    # naming the input data as using is just a convenient way to
+    # define the clear intent when calling this function that
+    # has the weird behaviour of returning the result inside one
+    # of the arguments
+    data = using
+
+    if isvalue(data):
+        result[prefix] = data
+    elif islist(data):
+        for e in data:
+            if isvalue(e):
+                result['{}/{}'.format(prefix, e)] = ''
+            else:
+                raise NestedListsNotSupportedError(
+                    'prefix: {}, element: {}'.format(prefix, e))
+    elif isinstance(data, dict):
+        for k in data:
+            path = '{}/{}'.format(prefix, k)
+            v = data[k]
+            if isvalue(v):
+                result[path] = v
+            elif isdumpable(v):
+                _populate(result, v, path)
+            else:
+                raise UnsupportedTypeError(
+                    'path: {}, key: {}, value: {}, type: {}'
+                    .format(path, k, v, type(v)))
+    else:
+        raise UnsupportedTypeError('data: {}, type: {}'.format(data, type(data)))
+
+
+def isvalue(var):
+    """Check if var has a value typethat can dumped directly using str()"""
+    for t in (str, unicode, int, float, long, bool):
+        if isinstance(var, t):
+            return True
+    return False
+
+
+def isdumpable(data):
+    """Check if data has a sequence type that can be dumped"""
+    for t in (list, tuple, dict, set):
+        if isinstance(data, t):
+            return True
+    return False
+
+
+def islist(data):
+    """Check if data is a sequence of value elements"""
+    for t in (list, tuple, set):
+        if isinstance(data, t):
+            return True
+    return False
+
+
+def register(user=None, framework=None, flavour=None, nodes=None, services=None):
+    """Register a new instance"""
+    prefix = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
+    try:
+        instanceid = _generate_id(prefix)
+    except kvstore.KeyDoesNotExist:
+        instanceid = 1
+    prefix = '{}/{}'.format(prefix, instanceid)
+    prefix_nodes = '{}/{}'.format(prefix, 'nodes')
+    prefix_services = '{}/{}'.format(prefix, 'services')
+    for node in nodes:
+        _dump_node(nodes[node], '{}/{}'.format(prefix_nodes, node))
+    for service in services:
+        _dump_node(services[service], '{}/{}'.format(prefix_services, service))
+    return prefix
+
+
+def _generate_id(prefix):
+    """Generate a new unique ID for the new instance"""
+    subtree = _kv.recurse(prefix)
+    instances = subtree.keys()
+    used_ids = {_parse_id(e, prefix) for e in instances}
+    return max(used_ids) + 1
+
+
+def valid(options, templateopts):
+    """Verify that all required options in the tempate are present"""
+    required = templateopts['required'].keys()
+    for k in required:
+        if k not in options:
+            return False
+    return True
+
+
+def _merge(options):
+    """Merge the input options into one dict"""
+    merged = {}
+    for t in ('required', 'optional', 'advanced'):
+        merged.update(options[t])
+    return merged
+
+
+def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
+    """Get the properties of a given instance of service"""
+    if not dn:
+        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, id)
+    return Cluster(dn)
+
+
+def _parse_id(route, prefix):
+    pattern = prefix + r'/([^/]+)'
+    m = re.match(pattern, route)
+    if m:
+        return int(m.group(1))
+    else:
+        return 0
 
 
 class Disk(object):

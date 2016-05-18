@@ -1,0 +1,21 @@
+{
+    "required": {
+        "slaves.number": 4
+    },
+    "optional": {
+        "slaves.cpu": 2,
+        "slaves.mem": 2048,
+        "slaves.disks": 11,
+        "dfs.blocksize": 134217728
+    },
+    "advanced": {
+        "datanode.heap": 1024
+    },
+    "descriptions": {
+        "slaves.number": "Number of slave nodes",
+        "slaves.cpu": "Number of cores per slave node",
+        "slaves.mem": "Memory per slave node (MB)",
+        "slaves.disks": "Number of disks per slave node",
+        "datanode.heap": "Max heap memory for the datanode service"
+    }
+}
