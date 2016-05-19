@@ -13,112 +13,39 @@ Basic usage examples::
 
     import registry
     registry.connect()
-    instance = registry.get_cluster_instance(user='jlopez', framework='cdh', flavour='5.7.0', id='1')
-    # Alternatively you can retrieve it by DN
-    instance = registry.get_cluster_instance(dn='jlopez/cdh/5.7.0/1')
 
-    nodes = instance.nodes
-    services = instance.services
+    # Register a new service template
+    registry.register(name, version, description, template, options)
+
+    # Instantiate a new cluster from a given service template
+    # using default template type: json+jinja2
+    cluster = registry.instantiate(user, servicename, version, options)
+    # using template type: yaml+jinja2
+    cluster = registry.instantiate(user, servicename, version, options, templatetype='yaml+jinja2')
+    # using template type: json+jinja2
+    cluster = registry.instantiate(user, servicename, version, options, templatetype='json+jinja2')
+
+    # Retrieve a previously instantiated cluster instance
+    cluster = registry.get_cluster_instance(user='jlopez', framework='cdh', flavour='5.7.0', id='1')
+    # Alternatively you can retrieve it by DN
+    cluster = registry.get_cluster_instance(dn='jlopez/cdh/5.7.0/1')
+
+    nodes = cluster.nodes
+    services = cluster.services
 
     for node in nodes:
         print node.status
 
-    (user, framework, flavour, instance_id) = registry.register(user='jlopez', framework='cdh', flavour='5.7.0', nodes=nodes, services=services)
+    nodes[0].status = 'running'
 
-    nodes = {
-        'master0': {
-            'name': 'master0.local', # docker name
-            'id': '', # docker id
-            'status': 'pending',
-            'cpu': '1',
-            'mem': '2048',
-            'disks': {
-                'type': 'ssd',
-                'number': 1,
-                'disk1': '/data/1',
-            },
-            'networks': {
-                'eth0': '10.117.253.101',
-                'eth1': '10.112.253.101',
-            },
-            'host': '', # docker engine
-            'services': ['service0', 'service1'],
-        },
-        'slave0': {
-            'name': 'slave0.local', # docker name
-            'id': '', # docker id
-            'status': 'pending',
-            'cpu': '1',
-            'mem': '2048',
-            'disks': {
-                'type': 'sata',
-                'number': 2,
-                'disk1': '/data/1',
-                'disk2': '/data/2',
-            },
-            'networks': {
-                'eth0': '10.117.253.101',
-                'eth1': '10.112.253.101',
-            },
-            'host': '', # docker engine
-            'services': ['service2'],
-        },
-    }
+    # Deregister a service template (removes it)
+    registry.deregister(service_name, service_version)
 
-    services = {
-        'service0': {
-            'status': 'pending',
-            'nodes': ['master0'],
-            'property1': '2048',
-            'property2': '11',
-        },
-        'service1': {
-            'status': 'running',
-            'nodes': ['slave0'],
-            'property1': '2048',
-            'property2': '11',
-        },
-    }
-
-    framework = {
-        'executor': 'docker-executor',
-        'image': 'gluster:2.7.0',
-        'management_script': 'http://.../manage_gluster_cluster.py'
-    }
-
+    # Deinstantiate a cluster instance (removes it)
+    registry.deinstantiate(user, framework, flavour)
 
 Notes
 -----
-
-```
-{'master0': {'cpu': '1',
-  'disks': {'disk1': '/data/1', 'number': 1, 'type': 'ssd'},
-  'host': '',
-  'id': '',
-  'mem': '2048',
-  'name': 'master0.local',
-  'networks': {'eth0': '10.117.253.101', 'eth1': '10.112.253.101'},
-  'services': ['service0', 'service1'],
-  'status': 'pending'},
- 'slave0': {'cpu': '1',
-  'disks': {'disk1': '/data/1',
-   'disk2': '/data/2',
-   'number': 2,
-   'type': 'sata',
-   'volumes': {'disk1': {'destination': '/data/1',
-     'mode': 'rw',
-     'origin': '/data/1/instances-jlopez-template-0.1.0-2'},
-    'disk2': {'destination': '/data/2', 'mode': 'rw', 'origin': '/data/2'}}},
-  'host': '',
-  'id': '',
-  'mem': '2048',
-  'name': 'slave0.local',
-  'networks': {'eth0': '10.117.253.101', 'eth1': '10.112.253.101'},
-  'services': ['service2'],
-  'status': 'pending'}}
-
-```
-
 
 Copy recursively an instance into a new one:
 
@@ -131,56 +58,34 @@ for k in slave1.keys():
 ```
 
 Sample service Template:
+------------------------
+
+- service-template.json
+- service-template.yaml
+
+Errors
+------
+
+FIXME: yaml+jinja2 fails the test 40% of the times:
 ```
-{% set comma = joiner(",") %}
-{
-"nodes": {
-    "master0": {
-        "name": "master0", "clustername": "X", "status": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 80, 443], "tags": ["yarn", "master"],
-        "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
-        "disks": {
-            "disk1": {
-                "name": "disk1", "type": "ssd",
-                "origin": "/data/1/{{ instancename }}",
-                "destination": "/data/1", "mode": "rw"
-            }
-        },
-        "networks": {
-            "eth0": {
-                "networkname": "admin", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            },
-            "eth1": {
-                "networkname": "storage", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            }
-        },
-        "services": ["yarn", "snamenode"]
-    },
-    "master1": {
-        "name": "master1", "clustername": "X", "status": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 80, 443], "tags": ["namenode", "master"],
-        "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
-        "disks": {
-            "disk1": {
-                "name": "disk1", "type": "ssd",
-                "origin": "/data/1/{{ instancename }}",
-                "destination": "/data/1", "mode": "rw"
-            }
-        },
-        "networks": {
-            "eth0": {
-                "networkname": "admin", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            },
-            "eth1": {
-                "networkname": "storage", "device": "X", "bridge": "X",
-                "address": "X", "gateway": "X", "netmask": "X"
-            }
+
+.E..........
+======================================================================
+ERROR: test_add_instance_yamltemplate (__main__.RegistryTemplatesTestCase)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests_integration.py", line 122, in test_add_instance_yamltemplate
+    self.assertEqual(cluster.nodes[0].networks[0].networkname, 'admin')
+  File "/home/jlopez/home_common/Reference/src/python/bigdata/configuration-registry/registry.py", line 372, in networks
+    subtree = _kv.recurse(self._endpoint + '/networks')
+  File "/home/jlopez/home_common/Reference/src/python/bigdata/configuration-registry/venv/local/lib/python2.7/site-packages/kvstore.py", line 68, in recurse
+    raise KeyDoesNotExist("Key " + k + " does not exist")
+KeyDoesNotExist: Key instances/testuser/__unittests__/0.1.0/44/nodes/master0/networks does not exist
+
+----------------------------------------------------------------------
+Ran 12 tests in 14.156s
+
+FAILED (errors=1)
+
 ```
 

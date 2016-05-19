@@ -3,6 +3,7 @@
 In this case they do not use a Mock, they access the real Consul K/V store
 """
 import unittest
+import time
 
 import kvstore
 import registry
@@ -19,6 +20,8 @@ with open('service-template.yaml') as yamltemplate:
 with open('options.json') as optionsfile:
     OPTIONS = optionsfile.read()
 
+DEBUG = False
+
 
 class RegistryTemplatesTestCase(unittest.TestCase):
 
@@ -26,11 +29,15 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         registry.connect(URL)
         self.PREFIX = registry.TMPLPREFIX
         self.servicename = "__unittests__"
+        self.start_time = time.time()
 
     def tearDown(self):
         registry._kv.delete('{}/{}'.format(self.PREFIX, self.servicename), recursive=True)
+        duration = time.time() - self.start_time
+        if DEBUG:
+            print '{} took {} seconds'.format(self.id(), duration)
 
-    def test_add_service_template(self):
+    def test_register(self):
         PREFIX = self.PREFIX
         name = self.servicename
         version = "0.1.0"
@@ -38,7 +45,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         template = TEMPLATE
         options = OPTIONS
 
-        registry.add_service_template(name, version, description, template, options)
+        registry.register(name, version, description, template, options)
 
         ret_name = registry._kv.get('{}/{}/{}/name'.format(PREFIX, name, version))
         ret_version = registry._kv.get('{}/{}/{}/version'.format(PREFIX, name, version))
@@ -70,7 +77,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         description = "Unit test"
         template = TEMPLATE
         options = OPTIONS
-        registry.add_service_template(name, version, description, template, options)
+        registry.register(name, version, description, template, options)
 
         service = registry.get_service_template(name, version)
 
@@ -80,21 +87,37 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         self.assertEqual(service.template, template)
         self.assertEqual(service.options, options)
 
-    def test_add_instance(self):
+    def test_add_instance_jsontemplate(self):
         servicename = self.servicename
         version = "0.1.0"
         description = "Unit test"
         template = TEMPLATE
         templateopts = OPTIONS
-        registry.add_service_template(servicename, version, description,
-                                      template, templateopts)
+        registry.register(servicename, version, description,
+                          template, templateopts, templatetype='json+jinja2')
         user = 'testuser'
+        options = {'slaves.number': 2}
+        cluster = registry.instantiate(user, servicename, version, options)
 
-        options = {'slaves.number': 8}
-        cluster = registry.add_service_instance(user, servicename, version, options)
+        ## expected 4 nodes: 2 slaves + 2 masters
+        self.assertEqual(len(cluster.nodes), options['slaves.number'] + 2)
+        self.assertEqual(len(cluster.services), 2)
+        self.assertEqual(cluster.nodes[0].networks[0].networkname, 'admin')
 
-        ## expected 10 nodes: 8 slaves + 2 masters
-        self.assertEqual(len(cluster.nodes), 8 + 2)
+    def test_add_instance_yamltemplate(self):
+        servicename = self.servicename
+        version = "0.1.0"
+        description = "Unit test"
+        template = TEMPLATEYAML
+        templateopts = OPTIONS
+        registry.register(servicename, version, description,
+                          template, templateopts, templatetype='yaml+jinja2')
+        user = 'testuser'
+        options = {'slaves.number': 2}
+        cluster = registry.instantiate(user, servicename, version, options)
+
+        ## expected 4 nodes: 2 slaves + 2 masters
+        self.assertEqual(len(cluster.nodes), options['slaves.number'] + 2)
         self.assertEqual(len(cluster.services), 2)
         self.assertEqual(cluster.nodes[0].networks[0].networkname, 'admin')
 
@@ -215,5 +238,20 @@ class RegistryTemplatesTestCase(unittest.TestCase):
             'X/services/yarn/yarn.scheduler.minimum-allocation-vcores': 1,
         }
         self.assertEqual(result, expected)
+
+    def _add_sample_service_instance(self):
+        servicename = self.servicename
+        version = "0.1.0"
+        description = "Unit test"
+        template = TEMPLATE
+        templateopts = OPTIONS
+        registry.register(servicename, version, description,
+                          template, templateopts)
+        user = 'testuser'
+
+        options = {'slaves.number': 1}
+        cluster = registry.instantiate(user, servicename, version, options)
+        return cluster
+
 if __name__ == '__main__':
     unittest.main()

@@ -203,53 +203,6 @@ class RegistryNodeTestCase(unittest.TestCase):
             registry.Disk('{}/{}'.format(basedn_disks, d)) for d in disks]
         self.assertEqual(sorted(node.disks), sorted(expected))
 
-    def test_set_node_disks_one_disk(self):
-        basedn = BASEDN + '/cluster1/nodes/master0'
-        expected = [{
-            'name': 'disk1',
-            'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
-            'destination': '/data/1',
-            'mode': 'rw'}, ]
-        node = registry.Node(basedn)
-        node.disks = expected
-        disk = node.disks[0]
-        print node.disks
-        print 'DEBUG: ' + str(disk)
-        self.assertEqual(disk.origin, expected['origin'])
-
-    def test_set_node_disks_two_disks(self):
-        basedn = BASEDN + '/cluster1/nodes/master0'
-        basedn_disks = basedn + '/disks'
-        expected = [
-            {
-                'name': 'disk1',
-                'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
-                'destination': '/data/1',
-                'mode': 'rw'
-            },
-            {
-                'name': 'disk2',
-                'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
-                'destination': '/data/2',
-                'mode': 'rw'
-            },
-        ]
-        node = registry.Node(basedn)
-        node.disks = expected
-        self.assertEqual(node.disks, sorted(expected))
-
-    def test_get_node_networks(self):
-        raise NotImplemented
-
-    def test_set_node_networks(self):
-        raise NotImplemented
-
-    def test_get_node_tags(self):
-        raise NotImplemented
-
-    def test_set_node_tags(self):
-        raise NotImplemented
-
 
 class RegistryServiceTestCase(unittest.TestCase):
 
@@ -343,42 +296,6 @@ class RegistryRegistrationTestCase(unittest.TestCase):
 
     def tearDown(self):
         pass
-
-    def test_register_new_cluster_instance_returns_dn(self):
-        nodes = REGISTRY['clusters']['cluster1']['nodes']
-        services = REGISTRY['clusters']['cluster1']['services']
-        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
-                               services=services)
-        expected = registry.PREFIX + '/jlopez/a/1.0.0/1'
-        self.assertEqual(dn, expected)
-
-    def test_register_two_cluster_instances(self):
-        nodes = REGISTRY['clusters']['cluster1']['nodes']
-        services = REGISTRY['clusters']['cluster1']['services']
-        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
-                               services=services)
-        expected = registry.PREFIX + '/jlopez/a/1.0.0/1'
-        self.assertEqual(dn, expected)
-        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
-                               services=services)
-        expected = registry.PREFIX + '/jlopez/a/1.0.0/2'
-        self.assertEqual(dn, expected)
-
-    def test_get_cluster_instance(self):
-        nodes = REGISTRY['clusters']['cluster1']['nodes']
-        services = REGISTRY['clusters']['cluster1']['services']
-        dn = registry.register(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
-                               services=services)
-        instance = registry.get_cluster_instance(dn=dn)
-        expected_dn = registry.PREFIX + '/jlopez/a/1.0.0/1'
-        expected_nodes = [
-            registry.Node('{}/nodes/{}'.format(expected_dn, e)) for e in nodes
-        ]
-        expected_services = [
-            registry.Service('{}/services/{}'.format(expected_dn, e)) for e in services
-        ]
-        self.assertEqual(sorted(instance.nodes), sorted(expected_nodes))
-        self.assertEqual(sorted(instance.services), sorted(expected_services))
 
     def test_parse_id(self):
         route = 'instances/jlopez/cdh/5.7.0/99/nodes/master0/status'

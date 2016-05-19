@@ -2,6 +2,7 @@
 import re
 import jinja2
 import json
+import yaml
 
 import kvstore
 
@@ -26,6 +27,10 @@ class UnsupportedTypeError(Exception):
     pass
 
 
+class UnsupportedTemplateFormatError(Exception):
+    pass
+
+
 def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     """Configure a new connection to the registry"""
     ENDPOINT = endpoint
@@ -33,8 +38,10 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     _kv = kvstore.Client(ENDPOINT)
 
 
-def add_service_template(name, version, description, template, options, templatetype='json+jinja2'):
-    """Register a new service template"""
+def register(name, version, description, template, options, templatetype='json+jinja2'):
+    """Register a new service template
+       Supported templates: json+jinja2, yaml+jinja2
+    """
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.set('{}/name'.format(dn), name)
     _kv.set('{}/version'.format(dn), version)
@@ -46,12 +53,18 @@ def add_service_template(name, version, description, template, options, template
 
 
 def get_service_template(name, version):
-    """Get the template of a given service"""
+    """Get the service template object for a given service"""
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     return Template(dn)
 
 
-def add_service_instance(user=None, framework=None, flavour=None, options=None):
+def deregister(name, version):
+    """Deregister a given service template"""
+    dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
+    _kv.delete(dn, recursive=True)
+
+
+def instantiate(user=None, framework=None, flavour=None, options=None):
     """Register a new instance using information from the service template"""
     service = get_service_template(framework, flavour)
     templateopts = json.loads(service.options)
@@ -74,7 +87,13 @@ def add_service_instance(user=None, framework=None, flavour=None, options=None):
     #       eg. instancedn, instancename, user, servicename, version
     rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
                         instancedn=dn, instancename=dn.replace('/', '-'))
-    data = json.loads(rendered)
+    if service.templatetype == 'json+jinja2':
+        data = json.loads(rendered)
+    elif service.templatetype == 'yaml+jinja2':
+        data = yaml.load(rendered)
+    else:
+        raise UnsupportedTemplateFormatError('type: {}'.format(service.templatetype))
+
     #import pprint
     #pprint.pprint(data)
     kvinfo = {}
@@ -83,72 +102,16 @@ def add_service_instance(user=None, framework=None, flavour=None, options=None):
     return Cluster(dn)
 
 
+def deinstantiate(user, framework, flavour):
+    """Deinstantiate (remove) a given cluster instance"""
+    dn = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
+    _kv.delete(dn, recursive=True)
+
+
 def save(kvinfo):
     """Save kvinfo in the k/v store"""
     for k in kvinfo:
         _kv.set(k, kvinfo[k])
-
-
-def dump(dn, data):
-    """Dump data contents in the given dn"""
-    prefix = dn
-    prefix_nodes = '{}/{}'.format(prefix, 'nodes')
-    prefix_services = '{}/{}'.format(prefix, 'services')
-    nodes = data['nodes']
-    services = data['services']
-    for node in nodes:
-        _dump_node(nodes[node], '{}/{}'.format(prefix_nodes, node))
-    for service in services:
-        _dump_node(services[service], '{}/{}'.format(prefix_services, service))
-    return prefix
-
-
-def _dump_simple_dict(data, prefix):
-    """Dump a simple dictionary that contains only k:v pairs"""
-    for k in data:
-        _kv.set('{}/{}'.format(prefix, k), data[k])
-
-
-def _dump_simple_list(data, prefix):
-    """Dump a simple list that contains only k:v pairs"""
-    for e in data:
-        _kv.set('{}/{}'.format(prefix, e), '')
-
-
-def _dump_list(data, prefix):
-    for e in data:
-        if isinstance(e, list):
-            _dump_list(e, '{}/{}'.format(prefix, '_')) # list of lists?
-        elif isinstance(e, dict):
-            _dump_dict(e, '{}/{}'.format(prefix, e["name"]))
-        elif isinstance(e, str):
-            _kv.set('{}/{}'.format(prefix, e), '')
-
-
-def _dump_dict(data, prefix):
-    for k in data:
-        v = data[k]
-        if isinstance(v, list):
-            _dump_list(v, '{}/{}'.format(prefix, k))
-        elif isinstance(v, dict):
-            _dump_dict(v, '{}/{}'.format(prefix, v["name"]))
-        elif isinstance(v, basestring):
-            # basestring is True for all strings, unicode, ascii...
-            _kv.set('{}/{}'.format(prefix, k), v)
-
-
-def _dump_node(node, prefix):
-    """A node can contain k/v pairs, and also non-nested dictionaries and lists"""
-    for k in node:
-        v = node[k]
-        if isinstance(v, str):
-            _kv.set('{}/{}'.format(prefix, k), v)
-        elif isinstance(v, dict):
-            #_dump_simple_dict(v, '{}/{}'.format(prefix, k))
-            _dump_dict(v, '{}/{}'.format(prefix, k))
-        elif isinstance(v, list) or isinstance(v, tuple):
-            #_dump_simple_list(v, '{}/{'.format(prefix, k))
-            _dump_list(v, '{}/{}'.format(prefix, k))
 
 
 def _populate(result, using, prefix=''):
@@ -208,23 +171,6 @@ def islist(data):
     return False
 
 
-def register(user=None, framework=None, flavour=None, nodes=None, services=None):
-    """Register a new instance"""
-    prefix = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
-    try:
-        instanceid = _generate_id(prefix)
-    except kvstore.KeyDoesNotExist:
-        instanceid = 1
-    prefix = '{}/{}'.format(prefix, instanceid)
-    prefix_nodes = '{}/{}'.format(prefix, 'nodes')
-    prefix_services = '{}/{}'.format(prefix, 'services')
-    for node in nodes:
-        _dump_node(nodes[node], '{}/{}'.format(prefix_nodes, node))
-    for service in services:
-        _dump_node(services[service], '{}/{}'.format(prefix_services, service))
-    return prefix
-
-
 def _generate_id(prefix):
     """Generate a new unique ID for the new instance"""
     subtree = _kv.recurse(prefix)
@@ -234,7 +180,7 @@ def _generate_id(prefix):
 
 
 def valid(options, templateopts):
-    """Verify that all required options in the tempate are present"""
+    """Verify that all required options in the template are present"""
     required = templateopts['required'].keys()
     for k in required:
         if k not in options:
