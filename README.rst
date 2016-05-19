@@ -14,21 +14,25 @@ Basic usage examples::
     import registry
     registry.connect()
 
-    # Register a new service template
+    # Register a new service template using default template type: json+jinja2
     registry.register(name, version, description, template, options)
+    # using template type: yaml+jinja2
+    cluster = registry.register(name, version, description, template,
+                                options, templatetype='yaml+jinja2')
 
     # Instantiate a new cluster from a given service template
-    # using default template type: json+jinja2
     cluster = registry.instantiate(user, servicename, version, options)
-    # using template type: yaml+jinja2
-    cluster = registry.instantiate(user, servicename, version, options, templatetype='yaml+jinja2')
-    # using template type: json+jinja2
-    cluster = registry.instantiate(user, servicename, version, options, templatetype='json+jinja2')
 
     # Retrieve a previously instantiated cluster instance
     cluster = registry.get_cluster_instance(user='jlopez', framework='cdh', flavour='5.7.0', id='1')
     # Alternatively you can retrieve it by DN
     cluster = registry.get_cluster_instance(dn='jlopez/cdh/5.7.0/1')
+
+    # Retrieve a previously registered Template object
+    templateProxy = registry.get_service_template(name, version)
+    template = templateProxy.template
+    options = templateProxy.options
+    description = templateProxy.description
 
     nodes = cluster.nodes
     services = cluster.services

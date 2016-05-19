@@ -131,7 +131,7 @@ def _populate(result, using, prefix=''):
             else:
                 raise NestedListsNotSupportedError(
                     'prefix: {}, element: {}'.format(prefix, e))
-    elif isinstance(data, dict):
+    elif isdict(data):
         for k in data:
             path = '{}/{}'.format(prefix, k)
             v = data[k]
@@ -166,6 +166,14 @@ def isdumpable(data):
 def islist(data):
     """Check if data is a sequence of value elements"""
     for t in (list, tuple, set):
+        if isinstance(data, t):
+            return True
+    return False
+
+
+def isdict(data):
+    """Check if data offers a dictonary interface"""
+    for t in (dict, ):
         if isinstance(data, t):
             return True
     return False
