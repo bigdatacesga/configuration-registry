@@ -38,18 +38,28 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     _kv = kvstore.Client(ENDPOINT)
 
 
-def register(name, version, description, template, options, templatetype='json+jinja2'):
+def register(name, version, templatetype='json+jinja2'):
     """Register a new service template
        Supported templates: json+jinja2, yaml+jinja2
     """
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.set('{}/name'.format(dn), name)
     _kv.set('{}/version'.format(dn), version)
-    _kv.set('{}/description'.format(dn), description)
-    _kv.set('{}/template'.format(dn), template)
     _kv.set('{}/templatetype'.format(dn), templatetype)
-    _kv.set('{}/options'.format(dn), options)
     return Template(dn)
+
+# def register(name, version, description, template, options, templatetype='json+jinja2'):
+#     """Register a new service template
+#        Supported templates: json+jinja2, yaml+jinja2
+#     """
+#     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
+#     _kv.set('{}/name'.format(dn), name)
+#     _kv.set('{}/version'.format(dn), version)
+#     _kv.set('{}/description'.format(dn), description)
+#     _kv.set('{}/template'.format(dn), template)
+#     _kv.set('{}/templatetype'.format(dn), templatetype)
+#     _kv.set('{}/options'.format(dn), options)
+#     return Template(dn)
 
 
 def get_service_template(name, version):
@@ -224,11 +234,11 @@ def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=N
     else:
         raise InvalidOptionsError
 
+    # FIXME this may not escalate with hundreds of instances
     subtree = _kv.recurse(dn)
-    returnedInstances = set()
-    for endpoint in subtree.keys():
-        returnedInstances.add(_parse_cluster_dn(endpoint))
+    returnedInstances = set([_parse_cluster_dn(e) for e in subtree.keys()])
 
+    # FIXME a None instance somehow always appears
     instancesList = list()
     for instance in returnedInstances:
         if instance is not None:
