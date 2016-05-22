@@ -204,6 +204,39 @@ def _merge(options):
     return merged
 
 
+def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=None):
+    """Get the properties of a given instance of service"""
+    if dn:
+        # dn is already specified, don't do anything
+        return [Cluster(dn)]
+    elif not user:
+        dn = '{}'.format(PREFIX)
+    elif user is not None and not framework:
+        dn = '{}/{}'.format(PREFIX, user)
+    elif user is not None and framework is not None and flavour is None:
+        dn = '{}/{}/{}'.format(PREFIX, user, framework)
+    elif user is not None and framework is not None and flavour is not None and id is None:
+        dn = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
+    elif user is not None and framework is not None and flavour is not None and id is not None:
+        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, id)
+        # full dn is specified
+        return [Cluster(dn)]
+    else:
+        raise InvalidOptionsError
+
+    subtree = _kv.recurse(dn)
+    returnedInstances = set()
+    for endpoint in subtree.keys():
+        returnedInstances.add(_parse_cluster_dn(endpoint))
+
+    instancesList = list()
+    for instance in returnedInstances:
+        if instance is not None:
+            instancesList.append(instance)
+
+    return instancesList
+
+
 def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
     """Get the properties of a given instance of service"""
     if not dn:
