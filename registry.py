@@ -10,8 +10,8 @@ import kvstore
 PREFIX = 'instances'
 TMPLPREFIX = 'templates'
 # Create a global kvstore client
-#ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
-ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
+ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
+#ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
 _kv = kvstore.Client(ENDPOINT)
 
 
@@ -66,6 +66,17 @@ def get_service_template(name, version):
     """Get the service template object for a given service"""
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     return Template(dn)
+
+def get_services_names():
+    subtree = _kv.recurse(TMPLPREFIX)
+    names = set([_parse_template_name(e) for e in subtree.keys() if not e.endswith("templates/")])
+    return list(names)
+
+def get_service_versions(service):
+    subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
+    versions = set([_parse_template_version(e, service) for e in subtree.keys()])
+    return list(versions)
+
 
 
 def deregister(name, version):
@@ -306,6 +317,14 @@ class Disk(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
+    def to_JSON(self):
+        return {
+            "name": self.name,
+            "type": self.type,
+            "mode": self.mode,
+            "origin": self.origin
+        }
+
 
 class Network(object):
     """Represents a network address
@@ -351,6 +370,13 @@ class Network(object):
 
     def __lt__(self, other):
         return self._endpoint < other._endpoint
+
+    def to_JSON(self):
+        return {
+            "address": self.address,
+            "description": self.description,
+            "networkname": self.networkname
+        }
 
 
 class Node(object):
@@ -480,6 +506,17 @@ class Node(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
+    def to_JSON(self):
+        return {
+            "name": self.name,
+            "cpu": self.cpu,
+            "mem": self.mem,
+            "host": self.host,
+            "status": self.status,
+            "disks": [disk.to_JSON() for disk in self.disks],
+            "networks": [network.to_JSON() for network in self.networks]
+        }
+
 
 class Service(object):
     """Represents a service"""
@@ -517,6 +554,12 @@ class Service(object):
 
     def __lt__(self, other):
         return self._endpoint < other._endpoint
+
+    def to_JSON(self):
+        return {
+            "name": self.name,
+            "status": self.status
+        }
 
 
 class Cluster(object):
@@ -560,6 +603,13 @@ class Cluster(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
+    def to_JSON(self):
+        return {
+            "instance_full_name": self.instance_full_name,
+            "nodes": [node.to_JSON() for node in self.nodes],
+            "services": [service.to_JSON() for service in self.services]
+        }
+
 
 class Template(object):
     """Represents a service template"""
@@ -585,6 +635,12 @@ class Template(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
+    def to_JSON(self):
+        return {
+            "name": self.name,
+            "description": self.description
+        }
+
 
 def _parse_endpoint_last_element(endpoint):
     """Parse the last element of a given endpoint"""
@@ -608,6 +664,16 @@ def _parse_cluster_dn(endpoint):
     if m:
         return m.group(1)
 
+
+def _parse_template_version(endpoint, service):
+    """Parse the template version part of a given endpoint"""
+    m = re.match(r'^(templates/{}/[^/]+)'.format(service), endpoint)
+    return m.group(1)
+
+def _parse_template_name(endpoint):
+    """Parse the template name part of a given endpoint"""
+    m = re.match(r'^(templates/[^/]+)', endpoint)
+    return m.group(1)
 
 def _parse_service(endpoint):
     """Parse the service part of a given endpoint"""
