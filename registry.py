@@ -692,7 +692,5 @@ def _parse_service_version(endpoint, service):
 
 def _parse_service_name(endpoint):
     """Parse the service name part of a given endpoint"""
-    m = re.match(r'^{}/([^/]+)', TMPLPREFIX, endpoint)
+    m = re.match(r'^{}/([^/]+)'.format(TMPLPREFIX), endpoint)
     return m.group(1)
-
-
