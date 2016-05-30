@@ -6,7 +6,6 @@ import yaml
 
 import kvstore
 
-#PREFIX = 'frameworks'
 PREFIX = 'instances'
 TMPLPREFIX = 'templates'
 # Create a global kvstore client
@@ -38,28 +37,21 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     _kv = kvstore.Client(ENDPOINT)
 
 
-def register(name, version, templatetype='json+jinja2'):
+def register(name, version, description,
+             template='', templatetype='json+jinja2',
+             options='', orquestrator=''):
     """Register a new service template
        Supported templates: json+jinja2, yaml+jinja2
     """
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.set('{}/name'.format(dn), name)
     _kv.set('{}/version'.format(dn), version)
+    _kv.set('{}/description'.format(dn), description)
+    _kv.set('{}/template'.format(dn), template)
     _kv.set('{}/templatetype'.format(dn), templatetype)
+    _kv.set('{}/options'.format(dn), options)
+    _kv.set('{}/orquestrator'.format(dn), orquestrator)
     return Template(dn)
-
-# def register(name, version, description, template, options, templatetype='json+jinja2'):
-#     """Register a new service template
-#        Supported templates: json+jinja2, yaml+jinja2
-#     """
-#     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
-#     _kv.set('{}/name'.format(dn), name)
-#     _kv.set('{}/version'.format(dn), version)
-#     _kv.set('{}/description'.format(dn), description)
-#     _kv.set('{}/template'.format(dn), template)
-#     _kv.set('{}/templatetype'.format(dn), templatetype)
-#     _kv.set('{}/options'.format(dn), options)
-#     return Template(dn)
 
 
 def get_service_template(name, version):
@@ -67,16 +59,19 @@ def get_service_template(name, version):
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     return Template(dn)
 
-def get_services_names():
+
+def get_services():
+    """Get the current list of registered services"""
     subtree = _kv.recurse(TMPLPREFIX)
-    names = set([_parse_template_name(e) for e in subtree.keys() if not e.endswith("templates/")])
+    names = set([_parse_service_name(e) for e in subtree.keys() if not e.endswith("templates/")])
     return list(names)
 
-def get_service_versions(service):
-    subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
-    versions = set([_parse_template_version(e, service) for e in subtree.keys()])
-    return list(versions)
 
+def get_service_versions(service):
+    """Get the list of registered versions for a given service"""
+    subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
+    versions = set([_parse_service_version(e, service) for e in subtree.keys()])
+    return list(versions)
 
 
 def deregister(name, version):
@@ -665,16 +660,6 @@ def _parse_cluster_dn(endpoint):
         return m.group(1)
 
 
-def _parse_template_version(endpoint, service):
-    """Parse the template version part of a given endpoint"""
-    m = re.match(r'^(templates/{}/[^/]+)'.format(service), endpoint)
-    return m.group(1)
-
-def _parse_template_name(endpoint):
-    """Parse the template name part of a given endpoint"""
-    m = re.match(r'^(templates/[^/]+)', endpoint)
-    return m.group(1)
-
 def _parse_service(endpoint):
     """Parse the service part of a given endpoint"""
     m = re.match(r'^(.*/services/[^/]+)', endpoint)
@@ -697,3 +682,17 @@ def _parse_network(endpoint):
     """Parse the network part of a given endpoint"""
     m = re.match(r'^(.*/networks/[^/]+)', endpoint)
     return m.group(1)
+
+
+def _parse_service_version(endpoint, service):
+    """Parse the service version part of a given endpoint"""
+    m = re.match(r'^{}/{}/([^/]+)'.format(TMPLPREFIX, service), endpoint)
+    return m.group(1)
+
+
+def _parse_service_name(endpoint):
+    """Parse the service name part of a given endpoint"""
+    m = re.match(r'^{}/([^/]+)', TMPLPREFIX, endpoint)
+    return m.group(1)
+
+
