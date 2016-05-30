@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='configuration-registry',
-    version='0.1.13',
+    version='0.1.14',
     author='Jonatan Enes & Javier Cacheiro',
     author_email='bigdata-dev@listas.cesga.es',
     url='https://github.com/javicacheiro/configuration-registry',
@@ -12,7 +12,7 @@ setup(
     description='Python Resource Allocation API',
     long_description=open('README.rst').read(),
     py_modules=['registry'],
-    install_requires=['requests'],
+    install_requires=['requests', 'PyYAML'],
     test_suite='tests',
     classifiers=[
         'License :: OSI Approved :: MIT License',
