@@ -80,7 +80,7 @@ def deregister(name, version):
     _kv.delete(dn, recursive=True)
 
 
-def instantiate(user=None, framework=None, flavour=None, options=None):
+def instantiate(user=None, framework=None, flavour=None, instancename=None, options=None):
     """Register a new instance using information from the service template"""
     service = get_service_template(framework, flavour)
     templateopts = json.loads(service.options)
@@ -101,8 +101,12 @@ def instantiate(user=None, framework=None, flavour=None, options=None):
     t = jinja2.Template(service.template)
     # TODO: Decide the global variables to pass to the template
     #       eg. instancedn, instancename, user, servicename, version
+    # rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
+    #                    instancedn=dn, instancename=dn.replace('/', '-'))
+
+    instancename = instancename + '_' + str(instanceid)
     rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
-                        instancedn=dn, instancename=dn.replace('/', '-'))
+                        instancedn=dn, instancename=instancename.replace('/', '_').replace('.', '-'))
     if service.templatetype == 'json+jinja2':
         data = json.loads(rendered)
     elif service.templatetype == 'yaml+jinja2':
@@ -248,7 +252,7 @@ def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=N
     instancesList = list()
     for instance in returnedInstances:
         if instance is not None:
-            instancesList.append(instance)
+            instancesList.append(instance.lstrip("instances/"))
 
     return instancesList
 
@@ -369,7 +373,7 @@ class Network(object):
     def to_JSON(self):
         return {
             "address": self.address,
-            "description": self.description,
+            #"description": self.description,
             "networkname": self.networkname
         }
 
@@ -600,7 +604,6 @@ class Cluster(object):
 
     def to_JSON(self):
         return {
-            "instance_full_name": self.instance_full_name,
             "nodes": [node.to_JSON() for node in self.nodes],
             "services": [service.to_JSON() for service in self.services]
         }
@@ -633,7 +636,9 @@ class Template(object):
     def to_JSON(self):
         return {
             "name": self.name,
-            "description": self.description
+            "version": self.version,
+            "description": self.description,
+            "options": json.loads(self.options)
         }
 
 
