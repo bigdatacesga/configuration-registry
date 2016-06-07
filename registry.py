@@ -224,7 +224,7 @@ def _merge(options):
     return merged
 
 
-def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=None):
+def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=None, attributes=None):
     """Get the properties of a given instance of service"""
     if dn:
         # dn is already specified, don't do anything
@@ -252,9 +252,31 @@ def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=N
     instancesList = list()
     for instance in returnedInstances:
         if instance is not None:
-            instancesList.append(instance.lstrip("instances/"))
+            trimmedInstance = instance
+            if user:
+                trimmedInstance = trimmedInstance.replace('instances/' + user + '/', "")
+            if framework:
+                trimmedInstance = trimmedInstance.replace(framework + '/', "")
+            if flavour:
+                trimmedInstance = trimmedInstance.replace(flavour + '/', "")
 
-    return instancesList
+            instancesList.append((instance, trimmedInstance))
+
+    if attributes:
+        expandedInstances = list()
+        for (instance, trimmedInstance) in instancesList:
+            d = dict()
+            d["instance"] = trimmedInstance
+            for attribute in attributes:
+                try:
+                    d[attribute] = Cluster(instance).get_attributes(attribute)
+                except(Exception):
+                    d[attribute] = "unknown"
+            expandedInstances.append(d)
+    else:
+        expandedInstances = instancesList
+
+    return expandedInstances
 
 
 def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
@@ -572,6 +594,10 @@ class Cluster(object):
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    # Temporary FIX ?
+    def get_attributes(self, attribute_name):
+        return _kv.get('{0}/{1}'.format(self._endpoint, attribute_name))
 
     # Temporary FIX ?
     def set_attributes(self, data):
