@@ -29,6 +29,9 @@ class UnsupportedTypeError(Exception):
 class UnsupportedTemplateFormatError(Exception):
     pass
 
+class KeyDoesNotExist(Exception):
+    pass
+
 
 def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
     """Configure a new connection to the registry"""
@@ -54,18 +57,12 @@ def register(name, version, description,
     return Template(dn)
 
 
-def get_service_template(name, version):
-    """Get the service template object for a given service"""
-    dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
-    return Template(dn)
-
 
 def get_services():
     """Get the current list of registered services"""
     subtree = _kv.recurse(TMPLPREFIX)
-    names = set([_parse_service_name(e) for e in subtree.keys() if not e.endswith("templates/")])
+    names = set([_parse_service_name(e) for e in subtree.keys()])
     return list(names)
-
 
 def get_service_versions(service):
     """Get the list of registered versions for a given service"""
@@ -73,14 +70,18 @@ def get_service_versions(service):
     versions = set([_parse_service_version(e, service) for e in subtree.keys()])
     return list(versions)
 
+def get_service_template(name, version):
+    """Get the service template object for a given service"""
+    dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
+    return Template(dn)
+
 
 def deregister(name, version):
     """Deregister a given service template"""
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.delete(dn, recursive=True)
 
-
-def instantiate(user=None, framework=None, flavour=None, instancename=None, options=None):
+def instantiate(user=None, framework=None, flavour=None, options=None):
     """Register a new instance using information from the service template"""
     service = get_service_template(framework, flavour)
     templateopts = json.loads(service.options)
@@ -100,13 +101,8 @@ def instantiate(user=None, framework=None, flavour=None, instancename=None, opti
 
     t = jinja2.Template(service.template)
     # TODO: Decide the global variables to pass to the template
-    #       eg. instancedn, instancename, user, servicename, version
-    # rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
-    #                    instancedn=dn, instancename=dn.replace('/', '-'))
-
-    instancename = instancename + '_' + str(instanceid)
     rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
-                        instancedn=dn, instancename=instancename.replace('/', '_').replace('.', '-'))
+                        instancedn=dn, instancename=dn.replace('/', '_').replace('.', '-'))
     if service.templatetype == 'json+jinja2':
         data = json.loads(rendered)
     elif service.templatetype == 'yaml+jinja2':
@@ -224,67 +220,37 @@ def _merge(options):
     return merged
 
 
-def get_cluster_instances(user=None, framework=None, flavour=None, id=None, dn=None, attributes=None):
-    """Get the properties of a given instance of service"""
-    if dn:
-        # dn is already specified, don't do anything
-        return [Cluster(dn)]
-    elif not user:
-        dn = '{}'.format(PREFIX)
-    elif user is not None and not framework:
-        dn = '{}/{}'.format(PREFIX, user)
-    elif user is not None and framework is not None and flavour is None:
-        dn = '{}/{}/{}'.format(PREFIX, user, framework)
-    elif user is not None and framework is not None and flavour is not None and id is None:
-        dn = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
-    elif user is not None and framework is not None and flavour is not None and id is not None:
-        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, id)
-        # full dn is specified
-        return [Cluster(dn)]
-    else:
-        raise InvalidOptionsError
+def _obstain_dns(user=None, service=None, version=None):
+    """ Get all the dns using parameters as filters (e.g.: gluster instances of a user)"""
+    dn = '{}'.format(PREFIX)
+    if user is not None:
+        dn = '{}/{}'.format(dn, user)
+
+    if service is not None:
+        dn = '{}/{}'.format(dn, service)
+
+    if version is not None:
+        dn = '{}/{}'.format(dn, version)
 
     # FIXME this may not escalate with hundreds of instances
     subtree = _kv.recurse(dn)
-    returnedInstances = set([_parse_cluster_dn(e) for e in subtree.keys()])
+    dns = set([_parse_cluster_dn(e) for e in subtree.keys()])
 
-    # FIXME a None instance somehow always appears
-    instancesList = list()
-    for instance in returnedInstances:
-        if instance is not None:
-            trimmedInstance = instance
-            if user:
-                trimmedInstance = trimmedInstance.replace('instances/' + user + '/', "")
-            if framework:
-                trimmedInstance = trimmedInstance.replace(framework + '/', "")
-            if flavour:
-                trimmedInstance = trimmedInstance.replace(flavour + '/', "")
-
-            instancesList.append((instance, trimmedInstance))
-
-    if attributes:
-        expandedInstances = list()
-        for (instance, trimmedInstance) in instancesList:
-            d = dict()
-            d["instance"] = trimmedInstance
-            for attribute in attributes:
-                try:
-                    d[attribute] = Cluster(instance).get_attributes(attribute)
-                except(Exception):
-                    d[attribute] = "unknown"
-            expandedInstances.append(d)
-    else:
-        expandedInstances = instancesList
-
-    return expandedInstances
+    # FIXME a None always seems to appear
+    return [dn for dn in dns if dn is not None]
+    #return dns
 
 
-def get_cluster_instance(user=None, framework=None, flavour=None, id=None, dn=None):
+def get_cluster_instance(user=None, service=None, flavour=None, id=None, dn=None):
     """Get the properties of a given instance of service"""
     if not dn:
-        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, id)
+        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, service, flavour, id)
     return Cluster(dn)
 
+def get_cluster_instances(user=None, service=None, version=None):
+    """Get a list of instances filtered by user, framework and version"""
+    instances = _obstain_dns(user, service, version)
+    return [get_cluster_instance(dn=instance) for instance in instances]
 
 def _parse_id(route, prefix):
     pattern = prefix + r'/([^/]+)'
@@ -321,7 +287,10 @@ class Disk(object):
         super(Disk, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
@@ -338,12 +307,13 @@ class Disk(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
-    def to_JSON(self):
+    def to_dict(self):
         return {
             "name": self.name,
             "type": self.type,
             "mode": self.mode,
-            "origin": self.origin
+            "origin": self.origin,
+            "destination": self.destination
         }
 
 
@@ -375,7 +345,10 @@ class Network(object):
         super(Network, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
@@ -392,11 +365,14 @@ class Network(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
-    def to_JSON(self):
+    def to_dict(self):
         return {
+            #"name": self.name, #FIXME name or networkname
+            "device": self.device,
+            "bridge": self.bridge,
             "address": self.address,
-            #"description": self.description,
-            "networkname": self.networkname
+            "netmask": self.netmask,
+            "gateway": self.gateway
         }
 
 
@@ -420,7 +396,10 @@ class Node(object):
         super(Node, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
@@ -527,15 +506,15 @@ class Node(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
-    def to_JSON(self):
+    def to_dict(self):
         return {
             "name": self.name,
             "cpu": self.cpu,
             "mem": self.mem,
             "host": self.host,
             "status": self.status,
-            "disks": [disk.to_JSON() for disk in self.disks],
-            "networks": [network.to_JSON() for network in self.networks]
+            "disks": [disk.to_dict() for disk in self.disks],
+            "networks": [network.to_dict() for network in self.networks]
         }
 
 
@@ -546,7 +525,10 @@ class Service(object):
         super(Service, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
@@ -576,7 +558,7 @@ class Service(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
-    def to_JSON(self):
+    def to_dict(self):
         return {
             "name": self.name,
             "status": self.status
@@ -590,16 +572,15 @@ class Cluster(object):
         super(Cluster, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
-    # Temporary FIX ?
-    def get_attributes(self, attribute_name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, attribute_name))
-
-    # Temporary FIX ?
+    # FIXME Temporary fix for networks setting, check if it is needed
     def set_attributes(self, data):
         for k in data:
             _kv.set('{0}/{1}'.format(self._endpoint, k), data[k])
@@ -628,10 +609,11 @@ class Cluster(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
-    def to_JSON(self):
+    def to_dict(self):
         return {
-            "nodes": [node.to_JSON() for node in self.nodes],
-            "services": [service.to_JSON() for service in self.services]
+            "instance_name": self.instance_name,
+            "nodes": [node.to_dict() for node in self.nodes],
+            "services": [service.to_dict() for service in self.services]
         }
 
 
@@ -642,7 +624,10 @@ class Template(object):
         super(Template, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
-        return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
@@ -659,12 +644,14 @@ class Template(object):
     def __lt__(self, other):
         return self._endpoint < other._endpoint
 
-    def to_JSON(self):
+    def to_dict(self):
         return {
             "name": self.name,
             "version": self.version,
             "description": self.description,
-            "options": json.loads(self.options)
+            "options": self.options,
+            "template": self.template,
+            "orquestrator": self.orquestrator
         }
 
 
