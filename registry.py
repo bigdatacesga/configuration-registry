@@ -494,6 +494,12 @@ class Node(object):
         value = ','.join(check_ports)
         _kv.set(dn, value)
 
+    @property
+    def cluster(self):
+        """Contains the cluster instance to which this node belgons to"""
+        clusterdn = extract_clusterdn_from_nodedn(self._endpoint)
+        return Cluster(clusterdn)
+
     def __str__(self):
         return str(self._endpoint)
 
@@ -516,6 +522,12 @@ class Node(object):
             "disks": [disk.to_dict() for disk in self.disks],
             "networks": [network.to_dict() for network in self.networks]
         }
+
+
+def extract_clusterdn_from_nodedn(nodedn):
+    """Extract the cluster DN from the given node DN"""
+    m = re.search(r'^(.*)/nodes/[^/]+$', nodedn)
+    return m.group(1)
 
 
 class Service(object):
