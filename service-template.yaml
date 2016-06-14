@@ -10,36 +10,39 @@ nodes:
     tags:
       - yarn
       - master
-    cpu: 1
-    mem: 1024
+    requirements:
+      cpu: 1
+      mem: 1024
+      node: c14-1
+      disks: [disk1, disk2]
     host: _
     id: _
     status: _
     disks:
       disk1:
-        name: disk1
+        name: _
         type: ssd
-        origin: /data/1/{{ instancename }}
+        origin: _
         destination: /data/1
         mode: rw
-        networks:
-          eth0:
-            networkname: admin
-            device: eth0
-            bridge: _
-            address: _
-            gateway: _
-            netmask: _
-          eth1:
-            networkname: storage
-            device: eth1
-            bridge: _
-            address: _
-            gateway: _
-            netmask: _
-        services: 
-          - yarn
-          - snamenode
+    networks:
+      eth0:
+        networkname: admin
+        device: eth0
+        bridge: _
+        address: _
+        gateway: _
+        netmask: _
+      eth1:
+        networkname: storage
+        device: eth1
+        bridge: _
+        address: _
+        gateway: _
+        netmask: _
+    services: 
+      - yarn
+      - snamenode
   master1:
     name: master1
     clustername: _
@@ -58,9 +61,9 @@ nodes:
     status: _
     disks:
       disk1:
-        name: disk1
+        name: _
         type: ssd
-        origin: /data/1/{{ instancename }}
+        origin: _
         destination: /data/1
         mode: rw
     networks:
@@ -100,9 +103,9 @@ nodes:
     disks:
 {% for k in range(0, opts['slaves.disks']) %}
       disk{{ k }}:
-        name: disk{{ k }}
+        name: _
         type: sata
-        origin: /data/{{ k }}/{{ instancename }}
+        origin: _
         destination: /data/{{ k }}
         mode: rw
 {% endfor %}

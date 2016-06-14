@@ -203,6 +203,13 @@ class RegistryNodeTestCase(unittest.TestCase):
             registry.Disk('{}/{}'.format(basedn_disks, d)) for d in disks]
         self.assertEqual(sorted(node.disks), sorted(expected))
 
+    def test_get_cluster_instance(self):
+        basedn = BASEDN + '/cluster1/nodes/master0'
+        node = registry.Node(basedn)
+        cluster = node.cluster
+        expected = registry.Cluster(BASEDN + '/cluster1')
+        self.assertEqual(cluster, expected)
+
 
 class RegistryServiceTestCase(unittest.TestCase):
 
