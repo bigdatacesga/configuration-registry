@@ -118,9 +118,9 @@ def instantiate(user=None, framework=None, flavour=None, options=None):
     return Cluster(dn)
 
 
-def deinstantiate(user, framework, flavour):
+def deinstantiate(user, framework, flavour, instanceid):
     """Deinstantiate (remove) a given cluster instance"""
-    dn = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
+    dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, framework, flavour, instanceid)
     _kv.delete(dn, recursive=True)
 
 
