@@ -225,14 +225,14 @@ def _merge(options):
 
 def _obstain_dns(user=None, service=None, version=None):
     """ Get all the dns using parameters as filters (e.g.: gluster instances of a user)"""
-    dn = '{}'.format(PREFIX)
-    if user is not None:
-        dn = '{}/{}'.format(dn, user)
+    # FIXME not finished
+    if user:
+        dn = '{}/{}'.format(PREFIX, user)
 
-    if service is not None:
+    if service:
         dn = '{}/{}'.format(dn, service)
 
-    if version is not None:
+    if version:
         dn = '{}/{}'.format(dn, version)
 
     # FIXME this may not escalate with hundreds of instances
