@@ -8,6 +8,8 @@ import kvstore
 
 PREFIX = 'instances'
 TMPLPREFIX = 'templates'
+# Characters used to replace slash in IDs
+SLASH = '__'
 # Create a global kvstore client
 ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
 #ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
@@ -28,6 +30,7 @@ class UnsupportedTypeError(Exception):
 
 class UnsupportedTemplateFormatError(Exception):
     pass
+
 
 class KeyDoesNotExist(Exception):
     pass
@@ -57,7 +60,6 @@ def register(name, version, description,
     return Template(dn)
 
 
-
 def get_services():
     """Get the current list of registered services"""
     subtree = _kv.recurse(TMPLPREFIX)
@@ -80,6 +82,7 @@ def deregister(name, version):
     """Deregister a given service template"""
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.delete(dn, recursive=True)
+
 
 def instantiate(user=None, framework=None, flavour=None, options=None):
     """Register a new instance using information from the service template"""
@@ -110,8 +113,6 @@ def instantiate(user=None, framework=None, flavour=None, options=None):
     else:
         raise UnsupportedTemplateFormatError('type: {}'.format(service.templatetype))
 
-    #import pprint
-    #pprint.pprint(data)
     kvinfo = {}
     _populate(kvinfo, using=data, prefix=dn)
     save(kvinfo)
@@ -131,11 +132,13 @@ def save(kvinfo):
 
 
 def _populate(result, using, prefix=''):
-    """Converts a data dict in a flat key:value data structure"""
-    # naming the input data as using is just a convenient way to
-    # define the clear intent when calling this function that
-    # has the weird behaviour of returning the result inside one
-    # of the arguments
+    """Converts a data dict in a flat key:value data structure
+
+       Naming the input data as using is just a convenient way to
+       define the clear intent when calling this function that
+       has the weird behaviour of returning the result inside one
+       of the arguments
+    """
     data = using
 
     if isvalue(data):
@@ -724,3 +727,21 @@ def _parse_service_name(endpoint):
     """Parse the service name part of a given endpoint"""
     m = re.match(r'^{}/([^/]+)'.format(TMPLPREFIX), endpoint)
     return m.group(1)
+
+
+def id_from(dn):
+    """Convert a DN string in an ID string
+
+    Basically the ID string is equivalent to a DN but without
+    certain characters that can cause problems like '/'
+    """
+    return dn.replace('/', SLASH)
+
+
+def dn_from(id):
+    """Convert an ID string into a DN string
+
+    Basically the ID string is equivalent to a DN but without
+    certain characters that can cause problems like '/'
+    """
+    return id.replace(SLASH, '/')

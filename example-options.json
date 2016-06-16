@@ -1,0 +1,12 @@
+{
+    "required": {
+    },
+    "optional": {
+        "size": 2
+    },
+    "advanced": {
+    },
+    "descriptions": {
+        "size": "number nodes"
+    }
+}
