@@ -352,8 +352,8 @@ class RegistryUtilsTestCase(unittest.TestCase):
         self.assertEqual(result, expected)
 
     def test_dn_from(self):
-        id = 'instances--cdh--5.7.0--1--nodes--node0--disks--disk99'
-        expected = 'instances/cdh/5__7__0/1/nodes/node0/disks/disk99'
+        id = 'instances--cdh--5__7__0--1--nodes--node0--disks--disk99'
+        expected = 'instances/cdh/5.7.0/1/nodes/node0/disks/disk99'
         result = registry.dn_from(id)
         self.assertEqual(result, expected)
 

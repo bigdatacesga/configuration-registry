@@ -745,4 +745,4 @@ def dn_from(id):
     Basically the ID string is equivalent to a DN but without
     certain characters that can cause problems like '/'
     """
-    return id.replace('.', DOT).replace(SLASH, '/')
+    return id.replace(DOT, '.').replace(SLASH, '/')
