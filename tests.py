@@ -347,13 +347,13 @@ class RegistryUtilsTestCase(unittest.TestCase):
 
     def test_id_from(self):
         dn = 'instances/cdh/5.7.0/1/nodes/node0/disks/disk99'
-        expected = 'instances__cdh__5.7.0__1__nodes__node0__disks__disk99'
+        expected = 'instances--cdh--5__7__0--1--nodes--node0--disks--disk99'
         result = registry.id_from(dn)
         self.assertEqual(result, expected)
 
     def test_dn_from(self):
-        id = 'instances__cdh__5.7.0__1__nodes__node0__disks__disk99'
-        expected = 'instances/cdh/5.7.0/1/nodes/node0/disks/disk99'
+        id = 'instances--cdh--5.7.0--1--nodes--node0--disks--disk99'
+        expected = 'instances/cdh/5__7__0/1/nodes/node0/disks/disk99'
         result = registry.dn_from(id)
         self.assertEqual(result, expected)
 

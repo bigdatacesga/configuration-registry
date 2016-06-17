@@ -9,7 +9,8 @@ import kvstore
 PREFIX = 'instances'
 TMPLPREFIX = 'templates'
 # Characters used to replace slash in IDs
-SLASH = '__'
+SLASH = '--'
+DOT = '__'
 # Create a global kvstore client
 ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
 #ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
@@ -735,7 +736,7 @@ def id_from(dn):
     Basically the ID string is equivalent to a DN but without
     certain characters that can cause problems like '/'
     """
-    return dn.replace('/', SLASH)
+    return dn.replace('/', SLASH).replace('.', DOT)
 
 
 def dn_from(id):
@@ -744,4 +745,4 @@ def dn_from(id):
     Basically the ID string is equivalent to a DN but without
     certain characters that can cause problems like '/'
     """
-    return id.replace(SLASH, '/')
+    return id.replace('.', DOT).replace(SLASH, '/')
