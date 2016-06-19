@@ -1,3 +1,4 @@
 kvstore
 jinja2
 PyYAML
+futures
