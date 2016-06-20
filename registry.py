@@ -79,7 +79,7 @@ def instantiate(user=None, framework=None, flavour=None, options=None):
     t = jinja2.Template(service.template)
     # TODO: Decide the global variables to pass to the template
     rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
-                        instancedn=dn, instancename=dn.replace('/', '_').replace('.', '-'))
+                        instancedn=dn, instanceid=id_from(dn), dnsname=framework)
     if service.templatetype == 'json+jinja2':
         data = json.loads(rendered)
     elif service.templatetype == 'yaml+jinja2':
