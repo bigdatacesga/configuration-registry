@@ -12,7 +12,7 @@ setup(
     description='Python Resource Allocation API',
     long_description=open('README.rst').read(),
     py_modules=['registry'],
-    install_requires=['requests', 'PyYAML'],
+    install_requires=['kvstore', 'requests', 'jinja2', 'PyYAML', 'futures'],
     test_suite='tests',
     classifiers=[
         'License :: OSI Approved :: MIT License',

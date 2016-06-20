@@ -13,7 +13,7 @@ TMPLPREFIX = 'templates'
 SLASH = '--'
 DOT = '__'
 # Create a global kvstore client
-ENDPOINT = 'http://10.112.0.101:8500/v1/kv'
+ENDPOINT = 'http://mesosmaster:8500/v1/kv'
 #ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
 _kv = kvstore.Client(ENDPOINT)
 
