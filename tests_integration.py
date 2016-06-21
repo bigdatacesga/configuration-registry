@@ -71,7 +71,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         result = registry.valid(options, templateopts)
         self.assertTrue(result)
 
-    def test_get_service_template(self):
+    def test_get_product(self):
         name = self.servicename
         version = "0.1.0"
         description = "Unit test"
@@ -79,7 +79,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         options = OPTIONS
         registry.register(name, version, description, template, options)
 
-        service = registry.get_service_template(name, version)
+        service = registry.get_product(name, version)
 
         self.assertEqual(service.name, name)
         self.assertEqual(service.version, version)

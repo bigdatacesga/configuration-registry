@@ -28,8 +28,8 @@ Basic usage examples::
     # Alternatively you can retrieve it by DN
     cluster = registry.get_cluster_instance(dn='jlopez/cdh/5.7.0/1')
 
-    # Retrieve a previously registered Template object
-    templateProxy = registry.get_service_template(name, version)
+    # Retrieve a previously registered Product object
+    product = registry.get_product(name, version)
     template = templateProxy.template
     options = templateProxy.options
     description = templateProxy.description

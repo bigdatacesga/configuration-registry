@@ -49,7 +49,7 @@ def register(name, version, description,
     _kv.set('{}/templatetype'.format(dn), templatetype)
     _kv.set('{}/options'.format(dn), options)
     _kv.set('{}/orquestrator'.format(dn), orquestrator)
-    return Template(dn)
+    return Product(dn)
 
 
 def deregister(name, version):
@@ -60,7 +60,7 @@ def deregister(name, version):
 
 def instantiate(user=None, framework=None, flavour=None, options=None):
     """Register a new instance using information from the service template"""
-    service = get_service_template(framework, flavour)
+    service = get_product(framework, flavour)
     templateopts = json.loads(service.options)
     if not valid(options, templateopts):
         raise InvalidOptionsError()
@@ -109,30 +109,30 @@ def save(kvinfo):
         #_kv.set(k, v)
 
 
-def get_service_template(name, version):
-    """Get the service template object for a given service"""
+def get_product(name, version):
+    """Get a product proxy object"""
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
-    return Template(dn)
+    return Product(dn)
 
 
 def get_cluster_instance(user=None, service=None, flavour=None, id=None, dn=None):
-    """Get the properties of a given instance of service"""
+    """Get the a cluster instance proxy object"""
     if not dn:
         dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, service, flavour, id)
     return Cluster(dn)
 
 
-def get_services():
-    """Get the list of registered services"""
+def get_products():
+    """Get the list of registered products"""
     subtree = _kv.recurse(TMPLPREFIX)
-    names = set([_parse_service_name(e) for e in subtree.keys()])
+    names = set([parse_product_name(e) for e in subtree.keys()])
     return list(names)
 
 
-def get_service_versions(service):
+def get_product_versions(service):
     """Get the list of registered versions for a given service"""
     subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
-    versions = set([_parse_service_version(e, service) for e in subtree.keys()])
+    versions = set([parse_product_version(e, service) for e in subtree.keys()])
     return list(versions)
 
 
@@ -327,11 +327,11 @@ class Cluster(object):
         }
 
 
-class Template(object):
+class Product(object):
     """Represents a service template"""
     def __init__(self, endpoint):
         # Avoid infinite recursion reading self._endpoint
-        super(Template, self).__setattr__('_endpoint', endpoint.rstrip('/'))
+        super(Product, self).__setattr__('_endpoint', endpoint.rstrip('/'))
 
     def __getattr__(self, name):
         try:
@@ -346,7 +346,7 @@ class Template(object):
         return str(self._endpoint)
 
     def __repr__(self):
-        return 'Template({})'.format(self._endpoint)
+        return 'Product({})'.format(self._endpoint)
 
     def __eq__(self, other):
         return self._endpoint == other._endpoint
@@ -681,13 +681,13 @@ def _parse_network(endpoint):
     return m.group(1)
 
 
-def _parse_service_version(endpoint, service):
+def parse_product_version(endpoint, service):
     """Parse the service version part of a given endpoint"""
     m = re.match(r'^{}/{}/([^/]+)'.format(TMPLPREFIX, service), endpoint)
     return m.group(1)
 
 
-def _parse_service_name(endpoint):
+def parse_product_name(endpoint):
     """Parse the service name part of a given endpoint"""
     m = re.match(r'^{}/([^/]+)'.format(TMPLPREFIX), endpoint)
     return m.group(1)
