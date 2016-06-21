@@ -28,9 +28,9 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
 def register(name, version, description,
              template='', options='', orquestrator='',
              templatetype='json+jinja2'):
-    """Register a new service template
+    """Register a new product
 
-       A service includes:
+       A product includes:
          - name
          - version
          - description
@@ -58,9 +58,9 @@ def deregister(name, version):
     _kv.delete(dn, recursive=True)
 
 
-def instantiate(user=None, framework=None, flavour=None, options=None):
+def instantiate(user=None, product=None, version=None, options=None):
     """Register a new instance using information from the service template"""
-    service = get_product(framework, flavour)
+    service = get_product(product, version)
     templateopts = json.loads(service.options)
     if not valid(options, templateopts):
         raise InvalidOptionsError()
@@ -69,7 +69,7 @@ def instantiate(user=None, framework=None, flavour=None, options=None):
     mergedopts.update(options)
 
     # Generate instanceid DN
-    prefix = '{}/{}/{}/{}'.format(PREFIX, user, framework, flavour)
+    prefix = '{}/{}/{}/{}'.format(PREFIX, user, product, version)
     try:
         instanceid = _generate_id(prefix)
     except kvstore.KeyDoesNotExist:
@@ -78,8 +78,8 @@ def instantiate(user=None, framework=None, flavour=None, options=None):
 
     t = jinja2.Template(service.template)
     # TODO: Decide the global variables to pass to the template
-    rendered = t.render(opts=mergedopts, user=user, servicename=framework, version=flavour,
-                        instancedn=dn, instanceid=id_from(dn), dnsname=framework)
+    rendered = t.render(opts=mergedopts, user=user, servicename=product, version=version,
+                        instancedn=dn, instanceid=id_from(dn), dnsname=product)
     if service.templatetype == 'json+jinja2':
         data = json.loads(rendered)
     elif service.templatetype == 'yaml+jinja2':
@@ -246,7 +246,7 @@ class Service(object):
     @property
     def nodes(self):
         subtree = _kv.recurse(self._endpoint + '/nodes')
-        nodes = [_parse_endpoint_last_element(e) for e in subtree.keys()]
+        nodes = [parse_endpoint_last_element(e) for e in subtree.keys()]
         clusterdn = _parse_cluster_dn(self._endpoint)
         return [Node('{}/nodes/{}'.format(clusterdn, n)) for n in nodes]
 
@@ -254,7 +254,7 @@ class Service(object):
     def nodes(self, nodes):
         _kv.delete('{0}/{1}'.format(self._endpoint, 'nodes'), recursive=True)
         for node in nodes:
-            _kv.set(_parse_endpoint_last_element(node._endpoint), '')
+            _kv.set(parse_endpoint_last_element(node._endpoint), '')
 
     def __str__(self):
         return str(self._endpoint)
@@ -511,7 +511,7 @@ class Node(object):
     @property
     def services(self):
         subtree = _kv.recurse(self._endpoint + '/services')
-        services = [_parse_endpoint_last_element(e) for e in subtree.keys()]
+        services = [parse_endpoint_last_element(e) for e in subtree.keys()]
         clusterdn = _parse_cluster_dn(self._endpoint)
         return [Service('{}/services/{}'.format(clusterdn, s)) for s in services]
 
@@ -519,7 +519,7 @@ class Node(object):
     def services(self, services):
         _kv.delete('{0}/{1}'.format(self._endpoint, 'services'), recursive=True)
         for service in services:
-            _kv.set(_parse_endpoint_last_element(service._endpoint), '')
+            _kv.set(parse_endpoint_last_element(service._endpoint), '')
 
     @property
     def disks(self):
@@ -634,9 +634,14 @@ def extract_clusterdn_from_nodedn(nodedn):
     return m.group(1)
 
 
-def _parse_endpoint_last_element(endpoint):
+def parse_endpoint_last_element(endpoint):
     """Parse the last element of a given endpoint"""
     return endpoint.rstrip('/').split('/')[-1]
+
+
+def parse_id(clusterdn):
+    """Parse the id of a given cluster"""
+    return parse_endpoint_last_element(clusterdn)
 
 
 def _parse_cluster_dn(endpoint):

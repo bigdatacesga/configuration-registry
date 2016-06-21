@@ -88,7 +88,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
     def test_register_new_cluster_instance_returns_dn(self):
         nodes = REGISTRY['clusters']['cluster1']['nodes']
         services = REGISTRY['clusters']['cluster1']['services']
-        dn = registry.instantiate(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+        dn = registry.instantiate(user='jlopez', product='a', version='1.0.0', nodes=nodes,
                                services=services)
         expected = registry.PREFIX + '/jlopez/a/1.0.0/1'
         self.assertEqual(dn, expected)
@@ -96,11 +96,11 @@ class RegistryTemplatesTestCase(unittest.TestCase):
     def test_register_two_cluster_instances(self):
         nodes = REGISTRY['clusters']['cluster1']['nodes']
         services = REGISTRY['clusters']['cluster1']['services']
-        dn = registry.instantiate(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+        dn = registry.instantiate(user='jlopez', product='a', version='1.0.0', nodes=nodes,
                                services=services)
         expected = registry.PREFIX + '/jlopez/a/1.0.0/1'
         self.assertEqual(dn, expected)
-        dn = registry.instantiate(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+        dn = registry.instantiate(user='jlopez', product='a', version='1.0.0', nodes=nodes,
                                services=services)
         expected = registry.PREFIX + '/jlopez/a/1.0.0/2'
         self.assertEqual(dn, expected)
@@ -108,7 +108,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
     def test_get_cluster_instance(self):
         nodes = REGISTRY['clusters']['cluster1']['nodes']
         services = REGISTRY['clusters']['cluster1']['services']
-        dn = registry.instantiate(user='jlopez', framework='a', flavour='1.0.0', nodes=nodes,
+        dn = registry.instantiate(user='jlopez', product='a', version='1.0.0', nodes=nodes,
                                services=services)
         instance = registry.get_cluster_instance(dn=dn)
         expected_dn = registry.PREFIX + '/jlopez/a/1.0.0/1'
