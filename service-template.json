@@ -2,17 +2,28 @@
 {
 "nodes": {
     "master0": {
-        "name": "master0", "clustername": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 80, 443], "tags": ["yarn", "master"],
+        "clustername": "X",
+        "docker_image": "X",
+        "docker_opts": "X",
+        "port": "X",
+        "check_ports": [22, 80, 443],
+        "tags": ["yarn", "master"],
         "cpu": 1, "mem": 1024,
-        "id": "X", "status": "X",
+        "id": "X",
+        "status": "X",
         "use_custom_disks" : "True",
         "disks": {
-            "disk1": {
-                "name": "disk1", "type": "ssd",
-                "origin": "/data/1/{{ instancename }}",
-                "destination": "/data/1", "mode": "rw"
+            "disk2": {
+                "type": "ssd",
+                "origin": "/data/2/{{ instancename }}",
+                "destination": "/storage",
+                "mode": "rw"
+            },
+            "disk3": {
+                "type": "ssd",
+                "origin": "/data/3/{{ instancename }}",
+                "destination": "/storage",
+                "mode": "rw"
             }
         },
         "networks": {
@@ -28,19 +39,18 @@
         "services": ["yarn", "snamenode"]
     },
     "master1": {
-        "name": "master1", "clustername": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 80, 443], "tags": ["namenode", "master"],
-        "cpu": 1, "mem": 1024,
+        "clustername": "X",
+        "docker_image": "X",
+        "docker_opts": "X",
+        "port": "X",
+        "check_ports": [22, 80, 443],
+        "tags": ["namenode", "master"],
+        "cpu": 1,
+        "mem": 1024,
         "required_node": "c13-1",
-        "id": "X", "status": "X",
-        "disks": {
-            "disk1": {
-                "name": "disk1", "type": "ssd",
-                "origin": "/data/1/{{ instancename }}",
-                "destination": "/data/1", "mode": "rw"
-            }
-        },
+        "id": "X",
+        "status": "X",
+        "disks": 2,
         "networks": {
             "eth0": {
                 "networkname": "admin", "device": "X", "bridge": "X",
@@ -49,22 +59,32 @@
             "eth1": {
                 "networkname": "storage", "device": "X", "bridge": "X",
                 "address": "X", "gateway": "X", "netmask": "X"
+            },
+            "eth2": {
+                "networkname": "heartbeat", "device": "X", "bridge": "X",
+                "address": "X", "gateway": "X", "netmask": "X"
             }
         },
         "services": ["namenode"]
     },
 {% for n in range(0, opts['slaves.number']) %}
     {{ comma() }} "slave{{ n }}": {
-        "name": "slave{{ n }}", "clustername": "X",
-        "docker_image": "X", "docker_opts": "X",
-        "port": "X", "check_ports": [22, 4444], "tags": ["datanode", "slave"],
+        "clustername": "X",
+        "docker_image": "X",
+        "docker_opts": "X",
+        "port": "X",
+        "check_ports": [22, 4444],
+        "tags": ["datanode", "slave"],
         "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
+        "host": "X",
+        "id": "X",
+        "status": "X",
         "disks": { {% set comma = joiner(",") %}{% for k in range(0, opts['slaves.disks']) %}
             {{ comma() }} "disk{{ k }}": {
-                "name": "disk{{ k }}", "type": "sata",
+                "type": "sata",
                 "origin": "/data/{{ k }}/{{ instancename }}",
-                "destination": "/data/{{ k }}", "mode": "rw"
+                "destination": "/data/{{ k }}",
+                "mode": "rw"
             } {% endfor %}
         },
         "networks": {

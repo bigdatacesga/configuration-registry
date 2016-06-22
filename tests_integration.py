@@ -289,6 +289,52 @@ class RegistryTemplatesTestCase(unittest.TestCase):
             else:
                 raise Exception("Unidentified node")
 
+    def test_get_resources_names(self):
+        servicename = self.servicename
+        version = "0.1.0"
+        description = "Unit test"
+        template = TEMPLATE
+        templateopts = OPTIONS
+        registry.register(servicename, version, description,
+                          template, templateopts, templatetype='json+jinja2')
+        user = 'testuser'
+        options = {'slaves.number': 1}
+        cluster = registry.instantiate(user, servicename, version, options)
+
+        nodes = cluster.nodes
+        for node in nodes:
+            if (registry.parse_endpoint_last_element(str(node)) == "master0"):
+                self.assertEqual(node.name, "master0")
+
+                disks = node.disks
+                disk_names = [disk.name for disk in disks]
+                self.assertEqual(sorted(disk_names), ["disk2", "disk3"])
+
+                networks = node.networks
+                network_names = [network.name for network in networks]
+                network_types = [network.networkname for network in networks]
+                self.assertEqual(sorted(network_names), ["eth0", "eth1"])
+                self.assertEqual(sorted(network_types), ["admin", "storage"])
+
+
+
+            elif (registry.parse_endpoint_last_element(str(node)) == "master1"):
+                self.assertEqual(node.name, "master1")
+
+                disks = node.disks
+                self.assertEqual(disks, "2")
+
+                networks = node.networks
+                network_names = [network.name for network in networks]
+                network_types = [network.networkname for network in networks]
+                self.assertEqual(sorted(network_names), ["eth0", "eth1", "eth2"])
+                self.assertEqual(sorted(network_types), ["admin", "heartbeat", "storage"])
+
+            elif (registry.parse_endpoint_last_element(str(node)) == "slave0"):
+                self.assertEqual(node.name, "slave0")
+
+            else:
+                raise Exception("Unidentified node")
 
 if __name__ == '__main__':
     unittest.main()

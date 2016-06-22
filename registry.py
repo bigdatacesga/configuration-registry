@@ -396,6 +396,10 @@ class Disk(object):
         except kvstore.KeyDoesNotExist as e:
             raise KeyDoesNotExist(e.message)
 
+    @property
+    def name(self):
+        return parse_endpoint_last_element(self._endpoint)
+
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
@@ -453,6 +457,9 @@ class Network(object):
             return _kv.get('{0}/{1}'.format(self._endpoint, name))
         except kvstore.KeyDoesNotExist as e:
             raise KeyDoesNotExist(e.message)
+    @property
+    def name(self):
+        return parse_endpoint_last_element(self._endpoint)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
@@ -510,6 +517,10 @@ class Node(object):
             return _kv.get('{0}/{1}'.format(self._endpoint, name))
         except kvstore.KeyDoesNotExist:
             return None
+
+    @property
+    def name(self):
+        return parse_endpoint_last_element(self._endpoint)
 
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
