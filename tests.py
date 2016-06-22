@@ -8,7 +8,7 @@ MASTER0 = {
     'status': 'pending',
     'mem': '2048',
     'cpu': '1',
-    'name': 'master0.local',
+    'name': 'master0',
     'id': '',
     'address': '',
     'host': '',
@@ -167,14 +167,14 @@ class RegistryNodeTestCase(unittest.TestCase):
 
     def test_get_node_name(self):
         node = registry.Node(BASEDN + '/cluster1/nodes/master0')
-        expected = REGISTRY[BASEDN]['cluster1']['nodes']['master0']['name']
+        expected = 'master0'
         name = node.name
         self.assertEqual(name, expected)
 
-    def test_set_node_name(self):
+    def test_set_node_name_not_allowed(self):
         node = registry.Node(BASEDN + '/cluster1/nodes/master0')
-        node.name = 'new.local'
-        self.assertEqual(node.name, 'new.local')
+        with self.assertRaises(registry.ReadOnlyAttributeError):
+            node.name = 'new.local'
 
     def test_get_node_services(self):
         basedn = BASEDN + '/cluster1/nodes/master0'
@@ -355,6 +355,12 @@ class RegistryUtilsTestCase(unittest.TestCase):
         id = 'instances--cdh--5__7__0--1--nodes--node0--disks--disk99'
         expected = 'instances/cdh/5.7.0/1/nodes/node0/disks/disk99'
         result = registry.dn_from(id)
+        self.assertEqual(result, expected)
+
+    def test_parse_name(self):
+        dn = 'instances/cdh/5.7.0/1/nodes/node0/disks/disk99'
+        expected = 'disk99'
+        result = registry.parse_name(dn)
         self.assertEqual(result, expected)
 
 

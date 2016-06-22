@@ -60,8 +60,8 @@ def deregister(name, version):
 
 def instantiate(user=None, product=None, version=None, options=None):
     """Register a new instance using information from the service template"""
-    service = get_product(product, version)
-    templateopts = json.loads(service.options)
+    product = get_product(product, version)
+    templateopts = json.loads(product.options)
     if not valid(options, templateopts):
         raise InvalidOptionsError()
 
@@ -71,21 +71,21 @@ def instantiate(user=None, product=None, version=None, options=None):
     # Generate instanceid DN
     prefix = '{}/{}/{}/{}'.format(PREFIX, user, product, version)
     try:
-        instanceid = _generate_id(prefix)
+        instanceid = generate_id(prefix)
     except kvstore.KeyDoesNotExist:
         instanceid = 1
     dn = '{}/{}'.format(prefix, instanceid)
 
-    t = jinja2.Template(service.template)
+    t = jinja2.Template(product.template)
     # TODO: Decide the global variables to pass to the template
     rendered = t.render(opts=mergedopts, user=user, servicename=product, version=version,
                         instancedn=dn, instanceid=id_from(dn), dnsname=product)
-    if service.templatetype == 'json+jinja2':
+    if product.templatetype == 'json+jinja2':
         data = json.loads(rendered)
-    elif service.templatetype == 'yaml+jinja2':
+    elif product.templatetype == 'yaml+jinja2':
         data = yaml.load(rendered)
     else:
-        raise UnsupportedTemplateFormatError('type: {}'.format(service.templatetype))
+        raise UnsupportedTemplateFormatError('type: {}'.format(product.templatetype))
 
     kvinfo = {}
     _populate(kvinfo, using=data, prefix=dn)
@@ -172,7 +172,7 @@ def _populate(result, using, prefix=''):
 
 
 def isvalue(var):
-    """Check if var has a value typethat can dumped directly using str()"""
+    """Check if var has a value type that can dumped directly using str()"""
     for t in (str, unicode, int, float, long, bool):
         if isinstance(var, t):
             return True
@@ -203,7 +203,7 @@ def isdict(data):
     return False
 
 
-def _generate_id(prefix):
+def generate_id(prefix):
     """Generate a new unique ID for the new instance"""
     subtree = _kv.recurse(prefix)
     instances = subtree.keys()
@@ -228,6 +228,44 @@ def _merge(options):
     return merged
 
 
+class Proxy(object):
+    """Base class for Proxy objects"""
+    def __init__(self, endpoint):
+        # Avoid infinite recursion reading self._endpoint
+        super(Proxy, self).__setattr__('_endpoint', endpoint.rstrip('/'))
+
+    def __getattr__(self, name):
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
+
+    def __setattr__(self, name, value):
+        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    @property
+    def dn(self):
+        return self._endpoint
+
+    def __str__(self):
+        return str(self._endpoint)
+
+    def __repr__(self):
+        return 'Proxy({})'.format(self._endpoint)
+
+    def __eq__(self, other):
+        return self._endpoint == other._endpoint
+
+    def __lt__(self, other):
+        return self._endpoint < other._endpoint
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "status": self.status
+        }
+
+
 class Service(object):
     """Represents a service"""
     def __init__(self, endpoint):
@@ -246,7 +284,7 @@ class Service(object):
     @property
     def nodes(self):
         subtree = _kv.recurse(self._endpoint + '/nodes')
-        nodes = [parse_endpoint_last_element(e) for e in subtree.keys()]
+        nodes = [parse_last_field(e) for e in subtree.keys()]
         clusterdn = _parse_cluster_dn(self._endpoint)
         return [Node('{}/nodes/{}'.format(clusterdn, n)) for n in nodes]
 
@@ -254,7 +292,7 @@ class Service(object):
     def nodes(self, nodes):
         _kv.delete('{0}/{1}'.format(self._endpoint, 'nodes'), recursive=True)
         for node in nodes:
-            _kv.set(parse_endpoint_last_element(node._endpoint), '')
+            _kv.set(parse_last_field(node._endpoint), '')
 
     def __str__(self):
         return str(self._endpoint)
@@ -398,7 +436,7 @@ class Disk(object):
 
     @property
     def name(self):
-        return parse_endpoint_last_element(self._endpoint)
+        return parse_last_field(self._endpoint)
 
     def get(self, name):
         try:
@@ -465,7 +503,7 @@ class Network(object):
             raise KeyDoesNotExist(e.message)
     @property
     def name(self):
-        return parse_endpoint_last_element(self._endpoint)
+        return parse_last_field(self._endpoint)
 
     def get(self, name):
         try:
@@ -532,15 +570,17 @@ class Node(object):
 
     @property
     def name(self):
-        return parse_endpoint_last_element(self._endpoint)
+        return parse_last_field(self._endpoint)
 
     def __setattr__(self, name, value):
+        if name == 'name':
+            raise ReadOnlyAttributeError(name)
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
     @property
     def services(self):
         subtree = _kv.recurse(self._endpoint + '/services')
-        services = [parse_endpoint_last_element(e) for e in subtree.keys()]
+        services = [parse_last_field(e) for e in subtree.keys()]
         clusterdn = _parse_cluster_dn(self._endpoint)
         return [Service('{}/services/{}'.format(clusterdn, s)) for s in services]
 
@@ -548,7 +588,7 @@ class Node(object):
     def services(self, services):
         _kv.delete('{0}/{1}'.format(self._endpoint, 'services'), recursive=True)
         for service in services:
-            _kv.set(parse_endpoint_last_element(service._endpoint), '')
+            _kv.set(parse_last_field(service._endpoint), '')
 
     @property
     def disks(self):
@@ -663,16 +703,6 @@ def extract_clusterdn_from_nodedn(nodedn):
     return m.group(1)
 
 
-def parse_endpoint_last_element(endpoint):
-    """Parse the last element of a given endpoint"""
-    return endpoint.rstrip('/').split('/')[-1]
-
-
-def parse_id(clusterdn):
-    """Parse the id of a given cluster"""
-    return parse_endpoint_last_element(clusterdn)
-
-
 def _parse_cluster_dn(endpoint):
     """Parse the cluster base DN of a given endpoint"""
     #fields = endpoint.split('/')
@@ -764,6 +794,9 @@ class UnsupportedTemplateFormatError(Exception):
 class KeyDoesNotExist(Exception):
     pass
 
+class ReadOnlyAttributeError(Exception):
+    pass
+
 
 # TODO Pending code review
 def _obtain_dns(user=None, service=None, version=None):
@@ -799,5 +832,19 @@ def _parse_id(route, prefix):
         return int(m.group(1))
     else:
         return 0
+
+def parse_name(endpoint):
+    """Parse the last element of a given endpoint"""
+    return endpoint.rstrip('/').split('/')[-1]
+
+
+def parse_last_field(endpoint):
+    """Parse the last element of a given endpoint"""
+    return endpoint.rstrip('/').split('/')[-1]
+
+
+def parse_id(clusterdn):
+    """Parse the id of a given cluster"""
+    return parse_last_field(clusterdn)
 
 
