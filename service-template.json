@@ -6,7 +6,8 @@
         "docker_image": "X", "docker_opts": "X",
         "port": "X", "check_ports": [22, 80, 443], "tags": ["yarn", "master"],
         "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
+        "id": "X", "status": "X",
+        "use_custom_disks" : "True",
         "disks": {
             "disk1": {
                 "name": "disk1", "type": "ssd",
@@ -31,7 +32,8 @@
         "docker_image": "X", "docker_opts": "X",
         "port": "X", "check_ports": [22, 80, 443], "tags": ["namenode", "master"],
         "cpu": 1, "mem": 1024,
-        "host": "X", "id": "X", "status": "X",
+        "required_node": "c13-1",
+        "id": "X", "status": "X",
         "disks": {
             "disk1": {
                 "name": "disk1", "type": "ssd",

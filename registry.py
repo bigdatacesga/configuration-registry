@@ -505,6 +505,12 @@ class Node(object):
         except kvstore.KeyDoesNotExist as e:
             raise KeyDoesNotExist(e.message)
 
+    def get(self, name):
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist:
+            return None
+
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 

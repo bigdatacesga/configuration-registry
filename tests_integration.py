@@ -253,5 +253,42 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         cluster = registry.instantiate(user, servicename, version, options)
         return cluster
 
+
+    def test_get_optional_attributes(self):
+        servicename = self.servicename
+        version = "0.1.0"
+        description = "Unit test"
+        template = TEMPLATE
+        templateopts = OPTIONS
+        registry.register(servicename, version, description,
+                          template, templateopts, templatetype='json+jinja2')
+        user = 'testuser'
+        options = {'slaves.number': 1}
+        cluster = registry.instantiate(user, servicename, version, options)
+
+        nodes = cluster.nodes
+        for node in nodes:
+            if(registry.parse_endpoint_last_element(str(node)) == "master0"):
+                required_node = node.get("required_node")
+                expected = None
+                self.assertEqual(required_node, expected)
+
+                custom_disks = node.get("use_custom_disks")
+                expected = "True"
+                self.assertEqual(custom_disks, expected)
+            elif(registry.parse_endpoint_last_element(str(node)) == "master1"):
+                required_node = node.get("required_node")
+                expected = "c13-1"
+                self.assertEqual(required_node, expected)
+
+                custom_disks = node.get("use_custom_disks")
+                expected = None
+                self.assertEqual(custom_disks, expected)
+            elif (registry.parse_endpoint_last_element(str(node)) == "slave0"):
+                pass
+            else:
+                raise Exception("Unidentified node")
+
+
 if __name__ == '__main__':
     unittest.main()
