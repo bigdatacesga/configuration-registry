@@ -185,15 +185,6 @@ class RegistryNodeTestCase(unittest.TestCase):
             registry.Service('{}/{}'.format(basedn_services, n)) for n in services]
         self.assertEqual(sorted(node.services), sorted(expected))
 
-    def test_set_node_services(self):
-        basedn = BASEDN + '/cluster1/nodes/master0'
-        basedn_services = BASEDN + '/cluster1/services'
-        node = registry.Service(basedn)
-        expected = [registry.Service('{}/service0'.format(basedn_services)),
-                    registry.Service('{}/service1'.format(basedn_services))]
-        node.services = expected
-        self.assertEqual(sorted(node.services), sorted(expected))
-
     def test_get_node_disks(self):
         basedn = BASEDN + '/cluster1/nodes/master0'
         basedn_disks = basedn + '/disks'
@@ -251,15 +242,6 @@ class RegistryServiceTestCase(unittest.TestCase):
         nodes = REGISTRY[BASEDN]['cluster1']['services']['service0']['nodes']
         expected = [
             registry.Node('{}/{}'.format(basedn_nodes, n)) for n in nodes]
-        self.assertEqual(sorted(service.nodes), sorted(expected))
-
-    def test_set_service_nodes(self):
-        basedn = BASEDN + '/cluster1/services/service0'
-        basedn_nodes = BASEDN + '/cluster1/nodes'
-        service = registry.Service(basedn)
-        expected = [registry.Node('{}/master0'.format(basedn_nodes)),
-                    registry.Node('{}/slave1'.format(basedn_nodes))]
-        service.nodes = expected
         self.assertEqual(sorted(service.nodes), sorted(expected))
 
 

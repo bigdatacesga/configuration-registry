@@ -110,7 +110,7 @@ class RegistryTemplatesTestCase(unittest.TestCase):
         services = REGISTRY['clusters']['cluster1']['services']
         dn = registry.instantiate(user='jlopez', product='a', version='1.0.0', nodes=nodes,
                                services=services)
-        instance = registry.get_cluster_instance(dn=dn)
+        instance = registry.get_cluster(dn=dn)
         expected_dn = registry.PREFIX + '/jlopez/a/1.0.0/1'
         expected_nodes = [
             registry.Node('{}/nodes/{}'.format(expected_dn, e)) for e in nodes

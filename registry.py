@@ -77,9 +77,8 @@ def instantiate(user=None, product=None, version=None, options=None):
     dn = '{}/{}'.format(prefix, instanceid)
 
     t = jinja2.Template(product.template)
-    # TODO: Decide the global variables to pass to the template
-    rendered = t.render(opts=mergedopts, user=user, servicename=product, version=version,
-                        instancedn=dn, instanceid=id_from(dn), dnsname=product)
+    rendered = t.render(opts=mergedopts, user=user, product=product, version=version,
+                        clusterdn=dn, clusterid=id_from(dn))
     if product.templatetype == 'json+jinja2':
         data = json.loads(rendered)
     elif product.templatetype == 'yaml+jinja2':
@@ -115,7 +114,7 @@ def get_product(name, version):
     return Product(dn)
 
 
-def get_cluster_instance(user=None, service=None, flavour=None, id=None, dn=None):
+def get_cluster(user=None, service=None, flavour=None, id=None, dn=None):
     """Get the a cluster instance proxy object"""
     if not dn:
         dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, service, flavour, id)
@@ -134,6 +133,234 @@ def get_product_versions(service):
     subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
     versions = set([parse_product_version(e, service) for e in subtree.keys()])
     return list(versions)
+
+
+class Proxy(object):
+    """Base class for Proxy objects
+
+    Acts as a proxy for the k/v store backend.
+
+    __serializable__ defines the fields to return by to_dict()
+    __readonly__ defines read only fields for __setattr__
+    """
+
+    __serializable__ = ('dn', 'name')
+    __readonly__ = ('name')
+
+    def __init__(self, endpoint):
+        # Avoid infinite recursion reading self._endpoint
+        super(Proxy, self).__setattr__('_endpoint', endpoint.rstrip('/'))
+
+    def __getattr__(self, name):
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist as e:
+            raise KeyDoesNotExist(e.message)
+
+    def __setattr__(self, name, value):
+        if name in self.__class__.__readonly__:
+            raise ReadOnlyAttributeError(name)
+        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    @property
+    def dn(self):
+        return self._endpoint
+
+    @property
+    def name(self):
+        return parse_last_field(self._endpoint)
+
+    def get(self, name, default=None):
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist:
+            return default
+
+    def set(self, name, value):
+        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
+
+    def __str__(self):
+        return str(self._endpoint)
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, self._endpoint)
+
+    def __eq__(self, other):
+        return self._endpoint == other._endpoint
+
+    def __lt__(self, other):
+        return self._endpoint < other._endpoint
+
+    def to_dict(self):
+        return {k: self.get(k) for k in self.__class__.__serializable__}
+
+
+class Service(Proxy):
+    """Represents a service"""
+    __serializable__ = ('dn', 'name', 'status')
+    __readonly__ = ('name', 'nodes')
+
+    @property
+    def nodes(self):
+        subtree = _kv.recurse(self._endpoint + '/nodes')
+        nodes = [parse_last_field(e) for e in subtree.keys()]
+        clusterdn = _parse_cluster_dn(self._endpoint)
+        return [Node('{}/nodes/{}'.format(clusterdn, n)) for n in nodes]
+
+
+class Cluster(Proxy):
+    """Represents a cluster instance"""
+    __serializable__ = ('dn', 'name', 'status')
+    __readonly__ = ('name', 'nodes', 'services')
+
+    @property
+    def nodes(self):
+        subtree = _kv.recurse(self._endpoint + '/nodes')
+        nodes = {_parse_node(e) for e in subtree.keys() if not e.endswith("/nodes/")}
+        return [Node(e) for e in nodes]
+
+    @property
+    def services(self):
+        subtree = _kv.recurse(self._endpoint + '/services')
+        services = {_parse_service(e) for e in subtree.keys() if not e.endswith("/services/")}
+        return [Service(e) for e in services]
+
+
+class Product(Proxy):
+    """Represents a Product"""
+    __serializable__ = ('dn', 'name', 'version', 'description')
+    __readonly__ = ('name')
+
+
+class Disk(Proxy):
+    """Represents a disk
+
+    To set the disks use:
+        node.disks = [
+            {
+                 'name': 'disk1',
+                 'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
+                 'destination': '/data/1',
+                 'mode': 'rw',
+                 'type': 'sata',
+            },
+            {
+                 'name': 'disk2',
+                 'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
+                 'destination': '/data/2',
+                 'mode': 'rw'
+                 'type': 'sata',
+            },
+        ]
+    """
+    __serializable__ = ('dn', 'name', 'type', 'mode', 'origin', 'destination')
+    __readonly__ = ('name')
+
+
+class Network(Proxy):
+    """Represents a network address
+
+    To set the networks use:
+        node.networks = [
+            {
+                 'name': 'eth0',
+                 'device': 'eth0',
+                 'bridge': 'virbrPRIVATE',
+                 'address': '10.112.251.101',
+                 'netmask': '16',
+                 'gateway': '10.112.0.1',
+            },
+            {
+                 'name': 'eth1',
+                 'device': 'eth1',
+                 'bridge': 'virbrSTORAGE',
+                 'address': '10.117.251.101',
+                 'netmask': '16',
+                 'gateway': '',
+            },
+        ]
+    """
+    __serializable__ = ('dn', 'name', 'device', 'bridge', 'address', 'netmask', 'gateway')
+    __readonly__ = ('name')
+
+
+class Node(Proxy):
+    """Represents a node
+
+    It must include:
+      * type: eg. docker
+      * name: eg. slave5
+      * clustername: eg. jlopez-cdh-5.7.0-1
+      * tags: eg. ('slave', 'datanode')
+      * docker_image: eg. cdh:5.7.0
+      * docker_opts: specific opts
+          eg. --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:ro
+      * disks
+      * networks
+      * services
+    """
+    __serializable__ = ('dn', 'name', 'cpu', 'mem', 'host', 'status')
+    __readonly__ = ('name', 'services', 'disks', 'networks', 'cluster', 'tags')
+
+    @property
+    def services(self):
+        subtree = _kv.recurse(self._endpoint + '/services')
+        services = [parse_last_field(e) for e in subtree.keys()]
+        clusterdn = _parse_cluster_dn(self._endpoint)
+        return [Service('{}/services/{}'.format(clusterdn, s)) for s in services]
+
+    @property
+    def disks(self):
+        subtree = _kv.recurse(self._endpoint + '/disks')
+        disks = set([_parse_disk(e) for e in subtree.keys()])
+        return [Disk(d) for d in disks]
+
+    @property
+    def networks(self):
+        subtree = _kv.recurse(self._endpoint + '/networks')
+        networks = set([_parse_network(e) for e in subtree.keys()])
+        return [Network(n) for n in sorted(networks)]
+
+    @property
+    def tags(self):
+        dn = '{0}/tags'.format(self._endpoint)
+        return [x.strip() for x in _kv.get(dn).split(',')]
+
+    @property
+    def cluster(self):
+        """Contains the cluster instance to which this node belgons to"""
+        clusterdn = extract_clusterdn_from_nodedn(self._endpoint)
+        return Cluster(clusterdn)
+
+
+class InvalidOptionsError(Exception):
+    pass
+
+
+class NestedListsNotSupportedError(Exception):
+    pass
+
+
+class UnsupportedTypeError(Exception):
+    pass
+
+
+class UnsupportedTemplateFormatError(Exception):
+    pass
+
+
+class KeyDoesNotExist(Exception):
+    pass
+
+
+class ReadOnlyAttributeError(Exception):
+    pass
+
+
+def extract_clusterdn_from_nodedn(nodedn):
+    """Extract the cluster DN from the given node DN"""
+    m = re.search(r'^(.*)/nodes/[^/]+$', nodedn)
+    return m.group(1)
 
 
 def _populate(result, using, prefix=''):
@@ -228,481 +455,6 @@ def _merge(options):
     return merged
 
 
-class Proxy(object):
-    """Base class for Proxy objects"""
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Proxy, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-
-    def __setattr__(self, name, value):
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    @property
-    def dn(self):
-        return self._endpoint
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Proxy({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "status": self.status
-        }
-
-
-class Service(object):
-    """Represents a service"""
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Service, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-
-    def __setattr__(self, name, value):
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    @property
-    def nodes(self):
-        subtree = _kv.recurse(self._endpoint + '/nodes')
-        nodes = [parse_last_field(e) for e in subtree.keys()]
-        clusterdn = _parse_cluster_dn(self._endpoint)
-        return [Node('{}/nodes/{}'.format(clusterdn, n)) for n in nodes]
-
-    @nodes.setter
-    def nodes(self, nodes):
-        _kv.delete('{0}/{1}'.format(self._endpoint, 'nodes'), recursive=True)
-        for node in nodes:
-            _kv.set(parse_last_field(node._endpoint), '')
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Service({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "status": self.status
-        }
-
-
-class Cluster(object):
-    """Represents a cluster instance"""
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Cluster, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-
-    def __setattr__(self, name, value):
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    # FIXME Temporary fix for networks setting, check if it is needed
-    def set_attributes(self, data):
-        for k in data:
-            _kv.set('{0}/{1}'.format(self._endpoint, k), data[k])
-
-    @property
-    def nodes(self):
-        subtree = _kv.recurse(self._endpoint + '/nodes')
-        nodes = {_parse_node(e) for e in subtree.keys() if not e.endswith("/nodes/")}
-        return [Node(e) for e in nodes]
-
-    @property
-    def services(self):
-        subtree = _kv.recurse(self._endpoint + '/services')
-        services = {_parse_service(e) for e in subtree.keys() if not e.endswith("/services/")}
-        return [Service(e) for e in services]
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Cluster({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            "instance_name": self.instance_name,
-            "nodes": [node.to_dict() for node in self.nodes],
-            "services": [service.to_dict() for service in self.services]
-        }
-
-
-class Product(object):
-    """Represents a service template"""
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Product, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-
-    def __setattr__(self, name, value):
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Product({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "version": self.version,
-            "description": self.description,
-            "options": self.options,
-            "template": self.template,
-            "orquestrator": self.orquestrator
-        }
-
-
-class Disk(object):
-    """Represents a disk
-
-    To set the disks use:
-        node.disks = [
-            {
-                 'name': 'disk1',
-                 'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
-                 'destination': '/data/1',
-                 'mode': 'rw',
-                 'type': 'sata',
-            },
-            {
-                 'name': 'disk2',
-                 'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
-                 'destination': '/data/2',
-                 'mode': 'rw'
-                 'type': 'sata',
-            },
-        ]
-    """
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Disk, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-
-    @property
-    def name(self):
-        return parse_last_field(self._endpoint)
-
-    def get(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist:
-            return None
-
-    def __setattr__(self, name, value):
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Disk({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "type": self.type,
-            "mode": self.mode,
-            "origin": self.origin,
-            "destination": self.destination
-        }
-
-
-class Network(object):
-    """Represents a network address
-
-    To set the networks use:
-        node.networks = [
-            {
-                 'name': 'eth0',
-                 'device': 'eth0',
-                 'bridge': 'virbrPRIVATE',
-                 'address': '10.112.251.101',
-                 'netmask': '16',
-                 'gateway': '10.112.0.1',
-            },
-            {
-                 'name': 'eth1',
-                 'device': 'eth1',
-                 'bridge': 'virbrSTORAGE',
-                 'address': '10.117.251.101',
-                 'netmask': '16',
-                 'gateway': '',
-            },
-        ]
-    """
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Network, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-    @property
-    def name(self):
-        return parse_last_field(self._endpoint)
-
-    def get(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist:
-            return None
-
-    def __setattr__(self, name, value):
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Network({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            #"name": self.name, #FIXME name or networkname
-            "device": self.device,
-            "bridge": self.bridge,
-            "address": self.address,
-            "netmask": self.netmask,
-            "gateway": self.gateway
-        }
-
-
-class Node(object):
-    """Represents a node
-
-    It must include:
-      * type: eg. docker
-      * name: eg. slave5
-      * clustername: eg. jlopez-cdh-5.7.0-1
-      * tags: eg. ('slave', 'datanode')
-      * docker_image: eg. cdh:5.7.0
-      * docker_opts: specific opts
-          eg. --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:ro
-      * disks
-      * networks
-      * services
-    """
-    def __init__(self, endpoint):
-        # Avoid infinite recursion reading self._endpoint
-        super(Node, self).__setattr__('_endpoint', endpoint.rstrip('/'))
-
-    def __getattr__(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist as e:
-            raise KeyDoesNotExist(e.message)
-
-    def get(self, name):
-        try:
-            return _kv.get('{0}/{1}'.format(self._endpoint, name))
-        except kvstore.KeyDoesNotExist:
-            return None
-
-    @property
-    def name(self):
-        return parse_last_field(self._endpoint)
-
-    def __setattr__(self, name, value):
-        if name == 'name':
-            raise ReadOnlyAttributeError(name)
-        _kv.set('{0}/{1}'.format(self._endpoint, name), value)
-
-    @property
-    def services(self):
-        subtree = _kv.recurse(self._endpoint + '/services')
-        services = [parse_last_field(e) for e in subtree.keys()]
-        clusterdn = _parse_cluster_dn(self._endpoint)
-        return [Service('{}/services/{}'.format(clusterdn, s)) for s in services]
-
-    @services.setter
-    def services(self, services):
-        _kv.delete('{0}/{1}'.format(self._endpoint, 'services'), recursive=True)
-        for service in services:
-            _kv.set(parse_last_field(service._endpoint), '')
-
-    @property
-    def disks(self):
-        subtree = _kv.recurse(self._endpoint + '/disks')
-        disks = set([_parse_disk(e) for e in subtree.keys() if not e.endswith("/disks/")])
-        return [Disk(d) for d in disks]
-
-    #FIXME: Temporary FIX
-    def set_disks(self, disks):
-        basedn = '{0}/{1}'.format(self._endpoint, 'disks')
-        #_kv.delete(basedn, recursive=True)
-        for disk in disks:
-            diskdn = '{0}/{1}'.format(basedn, disk['name'])
-            for k in disk:
-                _kv.set('{0}/{1}'.format(diskdn, k), disk[k])
-
-    @disks.setter
-    def disks(self, disks):
-        basedn = '{0}/{1}'.format(self._endpoint, 'disks')
-        _kv.delete(basedn, recursive=True)
-        for disk in disks:
-            diskdn = '{0}/{1}'.format(basedn, disk['name'])
-            _kv.set('{0}/origin'.format(diskdn), disk['origin'])
-            _kv.set('{0}/destination'.format(diskdn), disk['destination'])
-            _kv.set('{0}/mode'.format(diskdn), disk['mode'])
-            _kv.set('{0}/type'.format(diskdn), disk['type'])
-            _kv.set('{0}/name'.format(diskdn), disk['name'])
-
-    @property
-    def networks(self):
-        subtree = _kv.recurse(self._endpoint + '/networks')
-        networks = set([_parse_network(e) for e in subtree.keys()])
-        return [Network(n) for n in sorted(networks)]
-
-    #FIXME: Temporary FIX
-    def set_networks(self, networks):
-        basedn = '{0}/{1}'.format(self._endpoint, 'networks')
-        #_kv.delete(basedn, recursive=True)
-        for network in networks:
-            networkdn = '{0}/{1}'.format(basedn, network['name'])
-            for k in network:
-                _kv.set('{0}/{1}'.format(networkdn, k), network[k])
-
-    @networks.setter
-    def networks(self, networks):
-        basedn = '{0}/{1}'.format(self._endpoint, 'networks')
-        _kv.delete(basedn, recursive=True)
-        for network in networks:
-            networkdn = '{0}/{1}'.format(basedn, network['name'])
-            _kv.set('{0}/address'.format(networkdn), network['address'])
-            _kv.set('{0}/bridge'.format(networkdn), network['bridge'])
-            _kv.set('{0}/device'.format(networkdn), network['device'])
-            _kv.set('{0}/gateway'.format(networkdn), network['gateway'])
-            _kv.set('{0}/netmask'.format(networkdn), network['netmask'])
-            _kv.set('{0}/name'.format(networkdn), network['name'])
-
-    @property
-    def tags(self):
-        dn = '{0}/tags'.format(self._endpoint)
-        return [x.strip() for x in _kv.get(dn).split(',')]
-
-    @tags.setter
-    def tags(self, tags):
-        dn = '{0}/tags'.format(self._endpoint)
-        value = ','.join(tags)
-        _kv.set(dn, value)
-
-    @property
-    def check_ports(self):
-        dn = '{0}/check_ports'.format(self._endpoint)
-        return [int(x.strip()) for x in _kv.get(dn).split(',')]
-
-    @check_ports.setter
-    def check_ports(self, check_ports):
-        dn = '{0}/check_ports'.format(self._endpoint)
-        value = ','.join(check_ports)
-        _kv.set(dn, value)
-
-    @property
-    def cluster(self):
-        """Contains the cluster instance to which this node belgons to"""
-        clusterdn = extract_clusterdn_from_nodedn(self._endpoint)
-        return Cluster(clusterdn)
-
-    def __str__(self):
-        return str(self._endpoint)
-
-    def __repr__(self):
-        return 'Node({})'.format(self._endpoint)
-
-    def __eq__(self, other):
-        return self._endpoint == other._endpoint
-
-    def __lt__(self, other):
-        return self._endpoint < other._endpoint
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "cpu": self.cpu,
-            "mem": self.mem,
-            "host": self.host,
-            "status": self.status,
-            "disks": [disk.to_dict() for disk in self.disks],
-            "networks": [network.to_dict() for network in self.networks]
-        }
-
-
-def extract_clusterdn_from_nodedn(nodedn):
-    """Extract the cluster DN from the given node DN"""
-    m = re.search(r'^(.*)/nodes/[^/]+$', nodedn)
-    return m.group(1)
-
-
 def _parse_cluster_dn(endpoint):
     """Parse the cluster base DN of a given endpoint"""
     #fields = endpoint.split('/')
@@ -775,63 +527,35 @@ def dn_from(id):
     return id.replace(DOT, '.').replace(SLASH, '/')
 
 
-class InvalidOptionsError(Exception):
-    pass
+def _filter_cluster_endpoints(user=None, product=None, version=None):
+    """ Get a list of filtered cluster endpoints using parameters as filters"""
+    basedn = '{}/{}'.format(PREFIX, user)
+    if product:
+        basedn = '{}/{}'.format(basedn, product)
+        if version:
+            basedn = '{}/{}'.format(basedn, version)
 
-
-class NestedListsNotSupportedError(Exception):
-    pass
-
-
-class UnsupportedTypeError(Exception):
-    pass
-
-
-class UnsupportedTemplateFormatError(Exception):
-    pass
-
-
-class KeyDoesNotExist(Exception):
-    pass
-
-class ReadOnlyAttributeError(Exception):
-    pass
-
-
-# TODO Pending code review
-def _obtain_dns(user=None, service=None, version=None):
-    """ Get all the dns using parameters as filters (e.g.: gluster instances of a user)"""
-    # FIXME not finished
-    if user:
-        dn = '{}/{}'.format(PREFIX, user)
-
-    if service:
-        dn = '{}/{}'.format(dn, service)
-
-    if version:
-        dn = '{}/{}'.format(dn, version)
-
-    # FIXME this may not escalate with hundreds of instances
-    subtree = _kv.recurse(dn)
-    dns = set([_parse_cluster_dn(e) for e in subtree.keys()])
+    subtree = _kv.recurse(basedn)
+    clusters = set([_parse_cluster_dn(e) for e in subtree.keys()])
 
     # FIXME a None always seems to appear
-    return [dn for dn in dns if dn is not None]
-    #return dns
+    return [dn for dn in clusters if dn is not None]
 
 
-def get_cluster_instances(user=None, service=None, version=None):
-    """Get a list of instances filtered by user, framework and version"""
-    instances = _obtain_dns(user, service, version)
-    return [get_cluster_instance(dn=instance) for instance in instances]
+def query_clusters(user=None, service=None, version=None):
+    """Get a list of clusters filtered by user, product and version
 
-def _parse_id(route, prefix):
-    pattern = prefix + r'/([^/]+)'
-    m = re.match(pattern, route)
-    if m:
-        return int(m.group(1))
-    else:
-        return 0
+    The query parameters should be provided hierarquically, for example:
+        _filter_cluster_endpoints(user)
+        _filter_cluster_endpoints(user, product)
+        _filter_cluster_endpoints(user, product, version)
+    """
+    try:
+        clusters = _filter_cluster_endpoints(user, service, version)
+        return [get_cluster(dn=dn) for dn in clusters]
+    except kvstore.KeyDoesNotExist:
+        return None
+
 
 def parse_name(endpoint):
     """Parse the last element of a given endpoint"""
@@ -843,8 +567,10 @@ def parse_last_field(endpoint):
     return endpoint.rstrip('/').split('/')[-1]
 
 
-def parse_id(clusterdn):
-    """Parse the id of a given cluster"""
-    return parse_last_field(clusterdn)
-
-
+def _parse_id(route, prefix):
+    pattern = prefix + r'/([^/]+)'
+    m = re.match(pattern, route)
+    if m:
+        return int(m.group(1))
+    else:
+        return 0

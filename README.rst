@@ -24,9 +24,9 @@ Basic usage examples::
     cluster = registry.instantiate(user, servicename, version, options)
 
     # Retrieve a previously instantiated cluster instance
-    cluster = registry.get_cluster_instance(user='jlopez', framework='cdh', flavour='5.7.0', id='1')
+    cluster = registry.get_cluster(user='jlopez', framework='cdh', flavour='5.7.0', id='1')
     # Alternatively you can retrieve it by DN
-    cluster = registry.get_cluster_instance(dn='jlopez/cdh/5.7.0/1')
+    cluster = registry.get_cluster(dn='jlopez/cdh/5.7.0/1')
 
     # Retrieve a previously registered Product object
     product = registry.get_product(name, version)
