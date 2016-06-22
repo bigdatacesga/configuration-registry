@@ -400,6 +400,12 @@ class Disk(object):
     def name(self):
         return parse_endpoint_last_element(self._endpoint)
 
+    def get(self, name):
+        try:
+            return _kv.get('{0}/{1}'.format(self._endpoint, name))
+        except kvstore.KeyDoesNotExist:
+            return None
+
     def __setattr__(self, name, value):
         _kv.set('{0}/{1}'.format(self._endpoint, name), value)
 
