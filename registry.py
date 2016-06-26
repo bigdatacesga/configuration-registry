@@ -315,6 +315,15 @@ class Node(Proxy):
         disks = set([_parse_disk(e) for e in subtree.keys()])
         return [Disk(d) for d in disks]
 
+    #FIXME: Temporary FIX
+    def set_disks(self, disks):
+        basedn = '{0}/{1}'.format(self._endpoint, 'disks')
+        _kv.delete(basedn, recursive=True)
+        for disk in disks:
+            diskdn = '{0}/{1}'.format(basedn, disk['name'])
+            for k in disk:
+                _kv.set('{0}/{1}'.format(diskdn, k), disk[k])
+
     @property
     def networks(self):
         subtree = _kv.recurse(self._endpoint + '/networks')
