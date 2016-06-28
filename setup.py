@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='configuration-registry',
-    version='0.3.2',
+    version='0.3.3',
     author='Jonatan Enes & Javier Cacheiro',
     author_email='bigdata-dev@listas.cesga.es',
     url='https://github.com/javicacheiro/configuration-registry',

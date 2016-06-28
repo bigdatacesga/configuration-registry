@@ -72,15 +72,15 @@ def instantiate(user=None, product=None, version=None, options=None):
     id = generate_id(prefix)
     dn = '{}/{}'.format(prefix, id)
 
-    t = jinja2.Template(product.template)
+    t = jinja2.Template(product_proxy.template)
     rendered = t.render(opts=mergedopts, user=user, product=product, version=version,
                         clusterdn=dn, clusterid=id_from(dn))
-    if product.templatetype == 'json+jinja2':
+    if product_proxy.templatetype == 'json+jinja2':
         data = json.loads(rendered)
-    elif product.templatetype == 'yaml+jinja2':
+    elif product_proxy.templatetype == 'yaml+jinja2':
         data = yaml.load(rendered)
     else:
-        raise UnsupportedTemplateFormatError('type: {}'.format(product.templatetype))
+        raise UnsupportedTemplateFormatError('type: {}'.format(product_proxy.templatetype))
 
     kvinfo = {}
     _populate(kvinfo, using=data, prefix=dn)
