@@ -60,21 +60,17 @@ def deregister(name, version):
 
 def instantiate(user=None, product=None, version=None, options=None):
     """Register a new instance using information from the service template"""
-    product = get_product(product, version)
-    templateopts = json.loads(product.options)
+    product_proxy = get_product(product, version)
+    templateopts = json.loads(product_proxy.options)
     if not valid(options, templateopts):
         raise InvalidOptionsError()
 
     mergedopts = _merge(templateopts)
     mergedopts.update(options)
 
-    # Generate instanceid DN
     prefix = '{}/{}/{}/{}'.format(PREFIX, user, product, version)
-    try:
-        instanceid = generate_id(prefix)
-    except kvstore.KeyDoesNotExist:
-        instanceid = 1
-    dn = '{}/{}'.format(prefix, instanceid)
+    id = generate_id(prefix)
+    dn = '{}/{}'.format(prefix, id)
 
     t = jinja2.Template(product.template)
     rendered = t.render(opts=mergedopts, user=user, product=product, version=version,
@@ -446,7 +442,10 @@ def isdict(data):
 
 def generate_id(prefix):
     """Generate a new unique ID for the new instance"""
-    subtree = _kv.recurse(prefix)
+    try:
+        subtree = _kv.recurse(prefix)
+    except kvstore.KeyDoesNotExist:
+        return 1
     instances = subtree.keys()
     used_ids = {_parse_id(e, prefix) for e in instances}
     return max(used_ids) + 1
