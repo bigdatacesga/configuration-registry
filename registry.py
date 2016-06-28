@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import kvstore
 
-PREFIX = 'instances'
-TMPLPREFIX = 'templates'
+PREFIX = 'clusters'
+TMPLPREFIX = 'products'
 # Characters used to replace slash in IDs
 SLASH = '--'
 DOT = '__'
@@ -114,11 +114,27 @@ def get_product(name, version):
     return Product(dn)
 
 
-def get_cluster(user=None, service=None, flavour=None, id=None, dn=None):
+def get_cluster(user=None, product=None, version=None, id=None, dn=None):
     """Get the a cluster instance proxy object"""
     if not dn:
-        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, service, flavour, id)
+        dn = '{}/{}/{}/{}/{}'.format(PREFIX, user, product, version, id)
     return Cluster(dn)
+
+
+def query_clusters(user=None, service=None, version=None):
+    """Get a list of clusters filtered by user, product and version
+
+    The query parameters should be provided hierarquically, for example:
+        query_clusters(): returns all clusters
+        query_clusters(user): returns all clusters of the given user
+        query_clusters(user, product): given user and product
+        query_clusters(user, product, version): given user, product, version
+    """
+    try:
+        clusters = _filter_cluster_endpoints(user, service, version)
+        return [get_cluster(dn=dn) for dn in clusters]
+    except kvstore.KeyDoesNotExist:
+        return None
 
 
 def get_products():
@@ -285,20 +301,7 @@ class Network(Proxy):
 
 
 class Node(Proxy):
-    """Represents a node
-
-    It must include:
-      * type: eg. docker
-      * name: eg. slave5
-      * clustername: eg. jlopez-cdh-5.7.0-1
-      * tags: eg. ('slave', 'datanode')
-      * docker_image: eg. cdh:5.7.0
-      * docker_opts: specific opts
-          eg. --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:ro
-      * disks
-      * networks
-      * services
-    """
+    """Represents a node"""
     __serializable__ = ('dn', 'name', 'cpu', 'mem', 'host', 'status')
     __readonly__ = ('name', 'services', 'disks', 'networks', 'cluster', 'tags')
 
@@ -457,20 +460,12 @@ def _merge(options):
 
 def _parse_cluster_dn(endpoint):
     """Parse the cluster base DN of a given endpoint"""
-    #fields = endpoint.split('/')
-    #return '/'.join(fields[0:4])
-    m = re.match(r'^(.+)/services/[^/]+/nodes', endpoint)
-    if m:
-        return m.group(1)
-    m = re.match(r'^(.+)/nodes/[^/]+/services', endpoint)
-    if m:
-        return m.group(1)
-    m = re.match(r'^(.+)/services', endpoint)
-    if m:
-        return m.group(1)
-    m = re.match(r'^(.+)/nodes', endpoint)
-    if m:
-        return m.group(1)
+    prefix = PREFIX + '/'
+    location = endpoint.replace(prefix, '')
+    fields = location.split('/')
+    if len(location) < 4:
+        return None
+    return prefix + '/'.join(fields[:4])
 
 
 def _parse_service(endpoint):
@@ -529,32 +524,19 @@ def dn_from(id):
 
 def _filter_cluster_endpoints(user=None, product=None, version=None):
     """ Get a list of filtered cluster endpoints using parameters as filters"""
-    basedn = '{}/{}'.format(PREFIX, user)
-    if product:
-        basedn = '{}/{}'.format(basedn, product)
-        if version:
-            basedn = '{}/{}'.format(basedn, version)
+    basedn = PREFIX
+    if user:
+        basedn = '{}/{}'.format(PREFIX, user)
+        if product:
+            basedn = '{}/{}'.format(basedn, product)
+            if version:
+                basedn = '{}/{}'.format(basedn, version)
 
     subtree = _kv.recurse(basedn)
     clusters = set([_parse_cluster_dn(e) for e in subtree.keys()])
 
     # FIXME a None always seems to appear
     return [dn for dn in clusters if dn is not None]
-
-
-def query_clusters(user=None, service=None, version=None):
-    """Get a list of clusters filtered by user, product and version
-
-    The query parameters should be provided hierarquically, for example:
-        _filter_cluster_endpoints(user)
-        _filter_cluster_endpoints(user, product)
-        _filter_cluster_endpoints(user, product, version)
-    """
-    try:
-        clusters = _filter_cluster_endpoints(user, service, version)
-        return [get_cluster(dn=dn) for dn in clusters]
-    except kvstore.KeyDoesNotExist:
-        return None
 
 
 def parse_name(endpoint):

@@ -75,10 +75,13 @@ SERVICE1 = {
     'disks': '11',
 }
 
-#BASEDN = 'instances/cdh/5.7.0/1'
-BASEDN = 'clusters'
+PREFIX = 'clusters'
+USER = 'user'
+PRODUCT = 'product'
+VERSION = '1.0.0'
+BASEDN = '{}/{}/{}/{}'.format(PREFIX, USER, PRODUCT, VERSION)
 
-REGISTRY = {BASEDN: {
+REGISTRY = {PREFIX: { USER: { PRODUCT: { VERSION: {
     'cluster1': {
         'nodes': {
             'master0': MASTER0,
@@ -90,8 +93,7 @@ REGISTRY = {BASEDN: {
             'service1': SERVICE1
         },
         'status': 'running'
-    }
-}}
+}}}}}}
 
 
 class KVMock(object):
@@ -156,7 +158,7 @@ class RegistryNodeTestCase(unittest.TestCase):
 
     def test_get_node_status(self):
         node = registry.Node(BASEDN + '/cluster1/nodes/master0')
-        expected = REGISTRY[BASEDN]['cluster1']['nodes']['master0']['status']
+        expected = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['nodes']['master0']['status']
         status = node.status
         self.assertEqual(status, expected)
 
@@ -180,7 +182,7 @@ class RegistryNodeTestCase(unittest.TestCase):
         basedn = BASEDN + '/cluster1/nodes/master0'
         basedn_services = BASEDN + '/cluster1/services'
         node = registry.Node(basedn)
-        services = REGISTRY[BASEDN]['cluster1']['nodes']['master0']['services']
+        services = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['nodes']['master0']['services']
         expected = [
             registry.Service('{}/{}'.format(basedn_services, n)) for n in services]
         self.assertEqual(sorted(node.services), sorted(expected))
@@ -189,7 +191,7 @@ class RegistryNodeTestCase(unittest.TestCase):
         basedn = BASEDN + '/cluster1/nodes/master0'
         basedn_disks = basedn + '/disks'
         node = registry.Node(basedn)
-        disks = REGISTRY[BASEDN]['cluster1']['nodes']['master0']['disks'].keys()
+        disks = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['nodes']['master0']['disks'].keys()
         expected = [
             registry.Disk('{}/{}'.format(basedn_disks, d)) for d in disks]
         self.assertEqual(sorted(node.disks), sorted(expected))
@@ -214,7 +216,7 @@ class RegistryServiceTestCase(unittest.TestCase):
 
     def test_get_service_status(self):
         service = registry.Service(BASEDN + '/cluster1/services/service0')
-        expected = REGISTRY[BASEDN]['cluster1']['services']['service0']['status']
+        expected = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['services']['service0']['status']
         status = service.status
         self.assertEqual(status, expected)
 
@@ -225,7 +227,7 @@ class RegistryServiceTestCase(unittest.TestCase):
 
     def test_get_service_heap(self):
         service = registry.Service(BASEDN + '/cluster1/services/service0')
-        expected = REGISTRY[BASEDN]['cluster1']['services']['service0']['heap']
+        expected = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['services']['service0']['heap']
         heap = service.heap
         self.assertEqual(heap, expected)
 
@@ -239,7 +241,7 @@ class RegistryServiceTestCase(unittest.TestCase):
         basedn = BASEDN + '/cluster1/services/service0'
         basedn_nodes = BASEDN + '/cluster1/nodes'
         service = registry.Service(basedn)
-        nodes = REGISTRY[BASEDN]['cluster1']['services']['service0']['nodes']
+        nodes = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['services']['service0']['nodes']
         expected = [
             registry.Node('{}/{}'.format(basedn_nodes, n)) for n in nodes]
         self.assertEqual(sorted(service.nodes), sorted(expected))
@@ -256,23 +258,22 @@ class RegistryClusterTestCase(unittest.TestCase):
         pass
 
     def test_get_cluster_status(self):
-        cluster = registry.Cluster('/clusters/cluster1')
-        expected = REGISTRY['clusters']['cluster1']['status']
+        cluster = registry.Cluster(BASEDN + '/cluster1')
+        expected = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['status']
         status = cluster.status
         self.assertEqual(status, expected)
 
     def test_get_cluster_nodes(self):
         cluster = registry.Cluster(BASEDN + '/cluster1')
-        nodes = REGISTRY[BASEDN]['cluster1']['nodes'].keys()
+        nodes = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['nodes'].keys()
         expected = [
             registry.Node('{}/cluster1/nodes/{}'.format(BASEDN, e)) for e in nodes]
         self.assertEqual(sorted(cluster.nodes), sorted(expected))
 
     def test_get_cluster_services(self):
-        cluster = registry.Cluster('/clusters/cluster1')
-        services = REGISTRY['clusters']['cluster1']['services'].keys()
-        expected = [
-            registry.Node('clusters/cluster1/services/{0}'.format(e)) for e in services]
+        cluster = registry.Cluster(BASEDN + '/cluster1')
+        services = REGISTRY[PREFIX][USER][PRODUCT][VERSION]['cluster1']['services'].keys()
+        expected = [registry.Service('{}/cluster1/services/{}'.format(BASEDN, e)) for e in services]
         self.assertEqual(sorted(cluster.services), sorted(expected))
 
 
@@ -304,14 +305,14 @@ class RegistryUtilsTestCase(unittest.TestCase):
         pass
 
     def test_parse_cluster_dn_four_fields(self):
-        dn = 'instances/cdh/5.7.0/1/nodes/node0/services'
-        expected = 'instances/cdh/5.7.0/1'
+        dn = 'clusters/user/cdh/5.7.0/1/nodes/node0/services/service1/property'
+        expected = 'clusters/user/cdh/5.7.0/1'
         result = registry._parse_cluster_dn(dn)
         self.assertEqual(result, expected)
 
     def test_parse_cluster_dn_one_field(self):
-        dn = 'clusters/cluster1/nodes/node0/services'
-        expected = 'clusters/cluster1'
+        dn = 'clusters/user/cdh/5.7.0/cluster1/'
+        expected = 'clusters/user/cdh/5.7.0/cluster1'
         result = registry._parse_cluster_dn(dn)
         self.assertEqual(result, expected)
 
