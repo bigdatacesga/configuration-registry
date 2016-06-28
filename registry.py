@@ -108,9 +108,10 @@ def save(kvinfo):
         #_kv.set(k, v)
 
 
-def get_product(name, version):
+def get_product(name=None, version=None, dn=None):
     """Get a product proxy object"""
-    dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
+    if not dn:
+        dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     return Product(dn)
 
 
@@ -137,6 +138,15 @@ def query_clusters(user=None, service=None, version=None):
         return None
 
 
+def query_products(product=None, version=None):
+    """Get a list of products that can be filtered by product and version"""
+    try:
+        products = _filter_product_endpoints(product, version)
+        return [get_product(dn=dn) for dn in products]
+    except kvstore.KeyDoesNotExist:
+        return None
+
+# TODO: To be removed DEPRECATED
 def get_products():
     """Get the list of registered products"""
     subtree = _kv.recurse(TMPLPREFIX)
@@ -144,6 +154,7 @@ def get_products():
     return list(names)
 
 
+# TODO: To be removed DEPRECATED
 def get_product_versions(service):
     """Get the list of registered versions for a given service"""
     subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
@@ -468,6 +479,16 @@ def _parse_cluster_dn(endpoint):
     return prefix + '/'.join(fields[:4])
 
 
+def _parse_product_dn(endpoint):
+    """Parse the product DN of a given endpoint"""
+    prefix = TMPLPREFIX + '/'
+    location = endpoint.replace(prefix, '')
+    fields = location.split('/')
+    if len(location) < 2:
+        return None
+    return prefix + '/'.join(fields[:2])
+
+
 def _parse_service(endpoint):
     """Parse the service part of a given endpoint"""
     m = re.match(r'^(.*/services/[^/]+)', endpoint)
@@ -526,7 +547,7 @@ def _filter_cluster_endpoints(user=None, product=None, version=None):
     """ Get a list of filtered cluster endpoints using parameters as filters"""
     basedn = PREFIX
     if user:
-        basedn = '{}/{}'.format(PREFIX, user)
+        basedn = '{}/{}'.format(basedn, user)
         if product:
             basedn = '{}/{}'.format(basedn, product)
             if version:
@@ -535,8 +556,21 @@ def _filter_cluster_endpoints(user=None, product=None, version=None):
     subtree = _kv.recurse(basedn)
     clusters = set([_parse_cluster_dn(e) for e in subtree.keys()])
 
-    # FIXME a None always seems to appear
-    return [dn for dn in clusters if dn is not None]
+    return [dn for dn in clusters]
+
+
+def _filter_product_endpoints(product=None, version=None):
+    """ Get a list of filtered product endpoints using parameters as filters"""
+    basedn = TMPLPREFIX
+    if product:
+        basedn = '{}/{}'.format(basedn, product)
+        if version:
+            basedn = '{}/{}'.format(basedn, version)
+
+    subtree = _kv.recurse(basedn)
+    products = set([_parse_product_dn(e) for e in subtree.keys()])
+
+    return [dn for dn in products]
 
 
 def parse_name(endpoint):
