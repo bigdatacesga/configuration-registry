@@ -26,7 +26,7 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
 
 
 def register(name, version, description,
-             template='', options='', orquestrator='',
+             template='', options='', orchestrator='',
              templatetype='json+jinja2'):
     """Register a new product
 
@@ -37,7 +37,7 @@ def register(name, version, description,
          - template: a json template of the service
          - options: a dict with the keys required, optional,
             advanced and descriptions
-         - orquestrator: a init script that supports start,
+         - orchestrator: a init script that supports start,
             stop, and restart
          - tempatetype: json+jinja2 or yaml+jinja2
     """
@@ -48,7 +48,7 @@ def register(name, version, description,
     _kv.set('{}/template'.format(dn), template)
     _kv.set('{}/templatetype'.format(dn), templatetype)
     _kv.set('{}/options'.format(dn), options)
-    _kv.set('{}/orquestrator'.format(dn), orquestrator)
+    _kv.set('{}/orchestrator'.format(dn), orchestrator)
     return Product(dn)
 
 
