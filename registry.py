@@ -142,21 +142,6 @@ def query_products(product=None, version=None):
     except kvstore.KeyDoesNotExist:
         return None
 
-# TODO: To be removed DEPRECATED
-def get_products():
-    """Get the list of registered products"""
-    subtree = _kv.recurse(TMPLPREFIX)
-    names = set([parse_product_name(e) for e in subtree.keys()])
-    return list(names)
-
-
-# TODO: To be removed DEPRECATED
-def get_product_versions(service):
-    """Get the list of registered versions for a given service"""
-    subtree = _kv.recurse("{}/{}".format(TMPLPREFIX, service))
-    versions = set([parse_product_version(e, service) for e in subtree.keys()])
-    return list(versions)
-
 
 class Proxy(object):
     """Base class for Proxy objects
@@ -167,8 +152,8 @@ class Proxy(object):
     __readonly__ defines read only fields for __setattr__
     """
 
-    __serializable__ = ('dn', 'name')
-    __readonly__ = ('name')
+    __serializable__ = ()
+    __readonly__ = ('dn', 'name')
 
     def __init__(self, endpoint):
         # Avoid infinite recursion reading self._endpoint
@@ -215,13 +200,16 @@ class Proxy(object):
         return self._endpoint < other._endpoint
 
     def to_dict(self):
-        return {k: self.get(k) for k in self.__class__.__serializable__}
+        basic_fields = dict(dn=self.dn, name=self.name)
+        serializable_fields = {k: self.get(k) for k in self.__class__.__serializable__}
+        return serializable_fields.update(basic_fields)
+
 
 
 class Service(Proxy):
     """Represents a service"""
-    __serializable__ = ('dn', 'name', 'status')
-    __readonly__ = ('name', 'nodes')
+    __serializable__ = ('status',)
+    __readonly__ = ('dn', 'name', 'nodes')
 
     @property
     def nodes(self):
@@ -233,8 +221,8 @@ class Service(Proxy):
 
 class Cluster(Proxy):
     """Represents a cluster instance"""
-    __serializable__ = ('dn', 'name', 'status')
-    __readonly__ = ('name', 'nodes', 'services')
+    __serializable__ = ('status',)
+    __readonly__ = ('dn', 'name', 'nodes', 'services')
 
     @property
     def nodes(self):
@@ -251,66 +239,34 @@ class Cluster(Proxy):
 
 class Product(Proxy):
     """Represents a Product"""
-    __serializable__ = ('dn', 'name', 'version', 'description')
-    __readonly__ = ('name')
+    __serializable__ = ('version', 'description')
+    __readonly__ = ('dn', 'name')
+
+    @property
+    def name(self):
+        """Returns the name of the product
+
+        NOTICE: The last element in this case it is the version
+        """
+        return parse_next_to_last_field(self._endpoint)
 
 
 class Disk(Proxy):
-    """Represents a disk
-
-    To set the disks use:
-        node.disks = [
-            {
-                 'name': 'disk1',
-                 'origin': '/data/1/instances-jlopez-cdh-5.7.0-1',
-                 'destination': '/data/1',
-                 'mode': 'rw',
-                 'type': 'sata',
-            },
-            {
-                 'name': 'disk2',
-                 'origin': '/data/2/instances-jlopez-cdh-5.7.0-1',
-                 'destination': '/data/2',
-                 'mode': 'rw'
-                 'type': 'sata',
-            },
-        ]
-    """
-    __serializable__ = ('dn', 'name', 'type', 'mode', 'origin', 'destination')
-    __readonly__ = ('name')
+    """Represents a disk"""
+    __serializable__ = ('type', 'mode', 'origin', 'destination')
+    __readonly__ = ('dn', 'name')
 
 
 class Network(Proxy):
-    """Represents a network address
-
-    To set the networks use:
-        node.networks = [
-            {
-                 'name': 'eth0',
-                 'device': 'eth0',
-                 'bridge': 'virbrPRIVATE',
-                 'address': '10.112.251.101',
-                 'netmask': '16',
-                 'gateway': '10.112.0.1',
-            },
-            {
-                 'name': 'eth1',
-                 'device': 'eth1',
-                 'bridge': 'virbrSTORAGE',
-                 'address': '10.117.251.101',
-                 'netmask': '16',
-                 'gateway': '',
-            },
-        ]
-    """
-    __serializable__ = ('dn', 'name', 'device', 'bridge', 'address', 'netmask', 'gateway')
-    __readonly__ = ('name')
+    """Represents a network address"""
+    __serializable__ = ('device', 'bridge', 'address', 'netmask', 'gateway')
+    __readonly__ = ('dn', 'name')
 
 
 class Node(Proxy):
     """Represents a node"""
-    __serializable__ = ('dn', 'name', 'cpu', 'mem', 'host', 'status')
-    __readonly__ = ('name', 'services', 'disks', 'networks', 'cluster', 'tags')
+    __serializable__ = ('cpu', 'mem', 'host', 'status')
+    __readonly__ = ('dn', 'name', 'services', 'disks', 'networks', 'cluster', 'tags')
 
     @property
     def services(self):
@@ -580,6 +536,11 @@ def parse_name(endpoint):
 def parse_last_field(endpoint):
     """Parse the last element of a given endpoint"""
     return endpoint.rstrip('/').split('/')[-1]
+
+
+def parse_next_to_last_field(endpoint):
+    """Parse the next-to-last element of a given endpoint"""
+    return endpoint.rstrip('/').split('/')[-2]
 
 
 def _parse_id(route, prefix):
