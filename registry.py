@@ -12,9 +12,8 @@ TMPLPREFIX = 'products'
 # Characters used to replace slash in IDs
 SLASH = '--'
 DOT = '__'
-# Create a global kvstore client
-ENDPOINT = 'http://mesosmaster:8500/v1/kv'
-#ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
+# By default create a global kvstore client in localhost
+ENDPOINT = 'http://127.0.0.1:8500/v1/kv'
 _kv = kvstore.Client(ENDPOINT)
 
 
@@ -27,7 +26,7 @@ def connect(endpoint='http://127.0.0.1:8500/v1/kv'):
 
 def register(name, version, description,
              template='', options='', orchestrator='',
-             templatetype='json+jinja2'):
+             templatetype='json+jinja2', logo_url=''):
     """Register a new product
 
        A product includes:
@@ -40,6 +39,7 @@ def register(name, version, description,
          - orchestrator: a init script that supports start,
             stop, and restart
          - tempatetype: json+jinja2 or yaml+jinja2
+         - logo_url: a url with the product logo
     """
     dn = '{}/{}/{}'.format(TMPLPREFIX, name, version)
     _kv.set('{}/name'.format(dn), name)
@@ -49,6 +49,7 @@ def register(name, version, description,
     _kv.set('{}/templatetype'.format(dn), templatetype)
     _kv.set('{}/options'.format(dn), options)
     _kv.set('{}/orchestrator'.format(dn), orchestrator)
+    _kv.set('{}/logo_url'.format(dn), logo_url)
     return Product(dn)
 
 
@@ -239,7 +240,7 @@ class Cluster(Proxy):
 
 class Product(Proxy):
     """Represents a Product"""
-    __serializable__ = ('version', 'description')
+    __serializable__ = ('version', 'description', 'logo_url')
     __readonly__ = ('dn', 'name')
 
     @property
