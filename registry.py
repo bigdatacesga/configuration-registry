@@ -203,7 +203,9 @@ class Proxy(object):
     def to_dict(self):
         basic_fields = dict(dn=self.dn, name=self.name)
         serializable_fields = {k: self.get(k) for k in self.__class__.__serializable__}
-        return serializable_fields.update(basic_fields)
+        data = dict(basic_fields)
+        data.update(serializable_fields)
+        return data
 
 
 
